@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/users/45389
-// @version      2018.04.23.01
+// @version      2018.04.24.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -65,28 +65,44 @@
     function updateDistrictNameDisplay(){
         $('.wmecitiesoverlay-region').remove();
         if (_layer !== null) {
-            var mapCenter = new OpenLayers.Geometry.Point(W.map.center.lon,W.map.center.lat);
-            for (var i=0;i<_layer.features.length;i++){
-                var feature = _layer.features[i];
-                var color;
-                var text = '';
-                var num;
-                var url;
-                if(feature.geometry.containsPoint(mapCenter)) {
-                    text = feature.attributes.name;
-                    color = '#00ffff';
-                    var $div = $('<div>', {id:'wmecitiesoverlay', class:"wmecitiesoverlay-region", style:'display:inline-block;margin-left:10px;', title:'Click to toggle color on/off for this group'})
-                    .css({color:color, cursor:"pointer"})
-                    .click(toggleAreaFill);
-                    var $span = $('<span>').css({display:'inline-block'});
-                    $span.text(text).appendTo($div);
-                    $('.location-info-region').parent().append($div);
-                    if (color) {
-                        break;
+            if(_layer.features.length > 0){
+                var mapCenter = new OpenLayers.Geometry.Point(W.map.center.lon,W.map.center.lat);
+                for (var i=0;i<_layer.features.length;i++){
+                    var feature = _layer.features[i];
+                    var color;
+                    var text = '';
+                    var num;
+                    var url;
+                    if(pointInFeature(feature.geometry, mapCenter)){
+                        text = feature.attributes.name;
+                        color = '#00ffff';
+                        var $div = $('<div>', {id:'wmecitiesoverlay', class:"wmecitiesoverlay-region", style:'display:inline-block;margin-left:10px;', title:'Click to toggle color on/off for this group'})
+                        .css({color:color, cursor:"pointer"})
+                        .click(toggleAreaFill);
+                        var $span = $('<span>').css({display:'inline-block'});
+                        $span.text(text).appendTo($div);
+                        $('.location-info-region').parent().append($div);
+                        if (color) {
+                            break;
+                        }
                     }
                 }
             }
+            else
+                _layer.destroyFeatures();
         }
+    }
+
+    function pointInFeature(geometry, mapCenter){
+        if(geometry.CLASS_NAME == "OpenLayers.Geometry.Collection"){
+            for(let i=0; i<geometry.components.length; i++){
+                if(geometry.components[i].containsPoint(mapCenter))
+                    return true;
+            }
+        }
+        else
+            return geometry.containsPoint(mapCenter);
+        return false;
     }
 
     function toggleAreaFill() {
@@ -220,17 +236,20 @@ c&&"styleUrl"!=c){var d=this.createElementNS(this.kmlns,"Data");d.setAttribute("
         {
             _layer.destroyFeatures();
             currState = W.model.states.top.name;
+
             let stateAbbr = States.getAbbreviation(currState);
 
-            if(typeof kmlCache[stateAbbr] == 'undefined'){
-                return $.get(`https://raw.githubusercontent.com/WazeDev/WME-Cities-Overlay/master/KMLs/${stateAbbr}_Cities.kml`, function(kml){
-                    _kml = kml;
+            if(typeof stateAbbr !== "undefined"){
+                if(typeof kmlCache[stateAbbr] == 'undefined'){
+                    return $.get(`https://raw.githubusercontent.com/WazeDev/WME-Cities-Overlay/master/KMLs/${stateAbbr}_Cities.kml`, function(kml){
+                        _kml = kml;
+                        parseKML();
+                    });
+                }
+                else{
+                    _kml = kmlCache[stateAbbr];
                     parseKML();
-                });
-            }
-            else{
-                _kml = kmlCache[stateAbbr];
-                parseKML();
+                }
             }
         }
     }
