@@ -241,7 +241,7 @@ c&&"styleUrl"!=c){var d=this.createElementNS(this.kmlns,"Data");d.setAttribute("
 
             if(typeof stateAbbr !== "undefined"){
                 if(typeof kmlCache[stateAbbr] == 'undefined'){
-                    return $.get(`https://raw.githubusercontent.com/WazeDev/WME-Cities-Overlay/master/KMLs/${stateAbbr}_Cities.kml`, function(kml){
+                    return $.get(`https://raw.githubusercontent.com/kbaumgart/WME-Cities-Overlay/master/KMLs/${stateAbbr}_Cities.kml`, function(kml){
                         _kml = kml;
                         parseKML();
                     });
