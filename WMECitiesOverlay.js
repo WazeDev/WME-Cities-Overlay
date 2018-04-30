@@ -13,7 +13,7 @@
 (function() {
     'use strict';
 
-    var _color = '#7cb342';
+    var _color = '#E6E6E6';
     var _settingsStoreName = '_wme_cities';
     var _settings;
     var _features;
@@ -25,6 +25,7 @@
     var noFillStrokeOpacity = 0.9;
 
     let currState = "";
+    let currCity = "";
     let States = {};
     let kmlCache = {};
 
@@ -57,8 +58,8 @@
             var settings = {
                 layerVisible: _layer.visibility,
                 ShowCityLabels: _settings.ShowCityLabels,
-                FillPolygons: _settings.FillPolygons
-                //hiddenAreas: _settings.hiddenAreas
+                FillPolygons: _settings.FillPolygons,
+                HighlightFocusedCity: _settings.HighlightFocusedCity
             };
             localStorage.setItem(_settingsStoreName, JSON.stringify(settings));
         }
@@ -72,7 +73,27 @@
         return format.read(strKML);
     }
 
+    function findCurrCity(){
+        let newCity = "";
+        var mapCenter = new OpenLayers.Geometry.Point(W.map.center.lon,W.map.center.lat);
+        for (var i=0;i<_layer.features.length;i++){
+            var feature = _layer.features[i];
+            if(pointInFeature(feature.geometry, mapCenter)){
+                newCity = feature.attributes.name;
+                break;
+            }
+        }
+        return newCity;
+    }
+
     async function updateCitiesLayer(){
+        let newCurrCity = findCurrCity();
+
+        if(currCity != newCurrCity){
+            currCity = newCurrCity;
+            _layer.redraw();
+        }
+
         await updateCityPolygons();
         updateDistrictNameDisplay();
     }
@@ -81,31 +102,19 @@
         $('.wmecitiesoverlay-region').remove();
         if (_layer !== null) {
             if(_layer.features.length > 0){
-                var mapCenter = new OpenLayers.Geometry.Point(W.map.center.lon,W.map.center.lat);
-                for (var i=0;i<_layer.features.length;i++){
-                    var feature = _layer.features[i];
-                    var color;
-                    var text = '';
-                    var num;
-                    var url;
-                    if(pointInFeature(feature.geometry, mapCenter)){
-                        text = feature.attributes.name;
-                        color = '#00ffff';
-                        var $div = $('<div>', {id:'wmecitiesoverlay', class:"wmecitiesoverlay-region", style:'display:inline-block;margin-left:10px;', title:'Click to toggle color on/off for this group'})
-                        .css({color:color, cursor:"pointer"})
-                        .click(toggleAreaFill);
-                        var $span = $('<span>').css({display:'inline-block'});
-                        $span.text(text).appendTo($div);
-                        $('.location-info-region').parent().append($div);
-                        if (color) {
-                            break;
-                        }
-                    }
+                if(currCity != ""){
+                    let color = '#00ffff';
+                    var $div = $('<div>', {id:'wmecitiesoverlay', class:"wmecitiesoverlay-region", style:'display:inline-block;margin-left:10px;'})//, title:'Click to toggle color on/off for this group'})
+                    .css({color:color, cursor:"pointer"});
+                    //.click(toggleAreaFill);
+                    var $span = $('<span>').css({display:'inline-block'});
+                    $span.text(currCity).appendTo($div);
+                    $('.location-info-region').parent().append($div);
                 }
             }
-            else
-                _layer.destroyFeatures();
         }
+        else
+            _layer.destroyFeatures();
     }
 
     function pointInFeature(geometry, mapCenter){
@@ -120,7 +129,7 @@
         return false;
     }
 
-    function toggleAreaFill() {
+    /*function toggleAreaFill() {
         var text = $('#wmecitiesoverlay span').text();
         if (text) {
             var match = text.match(/WV-(\d+)/);
@@ -141,7 +150,7 @@
                 _layer.redraw();
             }
         }
-    }
+    }*/
 
     function init() {
         States = {
@@ -163,11 +172,11 @@
         var layerid = 'wme_cities_overlay';
         var layerStyle = new OpenLayers.StyleMap({
             strokeDashstyle: 'solid',
-            strokeColor: '#E6E6E6',
+            strokeColor: _color,
             strokeOpacity: _settings.FillPolygons ? defaultStrokeOpacity : noFillStrokeOpacity,
             strokeWidth: 2,
             fillOpacity: _settings.FillPolygons ? defaultFillOpacity : 0,
-            fillColor: '#E6E6E6', //'#7cb342',
+            fillColor: _color,
             fontColor: '#ffffff',
             label : "${labelText}",
             labelOutlineColor: '#000000',
@@ -189,7 +198,7 @@
         I18n.translations[I18n.locale].layers.name[layerid] = "Cities Overlay";
         W.map.addLayer(_layer);
         W.map.events.register("moveend", null, updateCitiesLayer);
-        //window.addEventListener('beforeunload', function saveOnClose() { saveSettingsToStorage(); }, false);
+
         if(!_settings.ShowCityLabels)
             _layer.styleMap.styles.default.defaultStyle.label = "";
 
@@ -204,6 +213,7 @@
             '<h6 style="margin-top:0px;">' + GM_info.script.version + '</h6>',
             '<div id="divWMECOFillPolygons"><input type="checkbox" id="_cbCOFillPolygons" class="wmecoSettingsCheckbox" /><label for="_cbCOFillPolygons">Fill polygons</label></div>',
             '<div id="divWMECOShowCityLabels"><input type="checkbox" id="_cbCOShowCityLabels" class="wmecoSettingsCheckbox" /><label for="_cbCOShowCityLabels">Show city labels</label></div>',
+            '<div id="divWMECOHighlightFocusedCity"><input type="checkbox" id="_cbCOHighlightFocusedCity" class="wmecoSettingsCheckbox" /><label for="_cbCOHighlightFocusedCity">Highlight focused city</label></div>',
             '</div>'
         ].join(' '));
 
@@ -219,18 +229,72 @@
 
         setChecked('_cbCOShowCityLabels', _settings.ShowCityLabels);
         setChecked('_cbCOFillPolygons', _settings.FillPolygons);
+        setChecked('_cbCOHighlightFocusedCity', _settings.HighlightFocusedCity);
 
         $('#_cbCOFillPolygons').change(function(){
-            //W.map.getLayerByUniqueName('wme_cities_overlay')
             _layer.styleMap.styles.default.defaultStyle.fillOpacity = this.checked ? defaultFillOpacity : 0;
             _layer.styleMap.styles.default.defaultStyle.strokeOpacity = this.checked ? defaultStrokeOpacity : noFillStrokeOpacity;
-            updatePolygons();
+            _layer.redraw();
         });
 
         $('#_cbCOShowCityLabels').change(function(){
             _layer.styleMap.styles.default.defaultStyle.label = this.checked ? "${labelText}" : "";
-            updatePolygons();
+            _layer.redraw();
         });
+
+        $('#_cbCOHighlightFocusedCity').change(function(){
+            if(this.checked){
+                insertHighlightingRules();
+            }
+            else{
+                let index = _layer.styleMap.styles.default.rules.findIndex(function(e){ return e.name == "WMECOHighlightCurr";});
+                if(index > -1)
+                    _layer.styleMap.styles.default.rules.splice(index, 1);
+
+                index = _layer.styleMap.styles.default.rules.findIndex(function(e){ return e.name == "WMECONoHighlight";});
+                if(index > -1)
+                    _layer.styleMap.styles.default.rules.splice(index, 1);
+                _layer.redraw();
+            }
+        });
+
+        currCity = findCurrCity();
+
+        if(_settings.HighlightFocusedCity)
+            insertHighlightingRules();
+    }
+
+    function insertHighlightingRules(){
+        //********** Rules ***********
+        let myRule = new W.Rule({
+            filter: new OL.Filter.Comparison({
+                type: '==',
+                evaluate: function(cityFeature) {
+                    return cityFeature.attributes.name === currCity;
+                }
+            }),
+            symbolizer: {
+                strokeColor: '#f7ad25',
+                fillColor: '#f7ad25'
+            },
+            name: "WMECOHighlightCurr"
+        });
+        let myRule2 = new W.Rule({
+            filter: new OL.Filter.Comparison({
+                type: '!=',
+                evaluate: function(cityFeature) {
+                    return cityFeature.attributes.name != currCity;
+                }
+            }),
+            symbolizer: {
+                strokeColor: _color,
+                fillColor: _color
+            },
+            name: "WMECONoHighlight"
+        });
+        _layer.styleMap.styles['default'].rules.push(myRule);
+        _layer.styleMap.styles['default'].rules.push(myRule2);
+        _layer.redraw();
     }
 
     function layerToggled(visible) {
@@ -239,7 +303,7 @@
     }
 
     function bootstrap(tries = 1) {
-        if (W && W.loginManager && W.loginManager.isLoggedIn() && W.model.states.top) {
+        if (W && W.loginManager && W.loginManager.isLoggedIn() && W.model.states.top && WazeWrap.Ready) {
             init();
             console.log('WME Cities Overlay:', 'Initialized');
         } else if(tries < 1000){
