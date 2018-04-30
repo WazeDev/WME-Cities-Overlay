@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/users/45389
-// @version      2018.04.24.01
+// @version      2018.04.30.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -21,28 +21,43 @@
     var _layerName = 'Cities Overlay';
     var _layer = null;
     var defaultFillOpacity = 0.3;
+    var defaultStrokeOpacity = 0.6;
+    var noFillStrokeOpacity = 0.9;
 
     let currState = "";
     let States = {};
     let kmlCache = {};
 
-    function loadSettingsFromStorage() {
+    function isChecked(checkboxId) {
+        return $('#' + checkboxId).is(':checked');
+    }
+
+    function setChecked(checkboxId, checked) {
+        $('#' + checkboxId).prop('checked', checked);
+    }
+
+    function loadSettings() {
         _settings = $.parseJSON(localStorage.getItem(_settingsStoreName));
-        if(!_settings) {
-            _settings = {
-                layerVisible: true
-                //hiddenAreas: []
-            };
-        } else {
-            _settings.layerVisible = (_settings.layerVisible === true);
-            //_settings.hiddenAreas = _settings.hiddenAreas || [];
+        let _defaultsettings = {
+            layerVisible: true,
+            ShowCityLabels: true,
+            FillPolygons: true
+            //hiddenAreas: []
+        };
+        if(!_settings)
+            _settings = _defaultsettings;
+        for (var prop in _defaultsettings) {
+            if (!_settings.hasOwnProperty(prop))
+                _settings[prop] = _defaultsettings[prop];
         }
     }
 
-    function saveSettingsToStorage() {
+    function saveSettings() {
         if (localStorage) {
             var settings = {
-                layerVisible: _layer.visibility
+                layerVisible: _layer.visibility,
+                ShowCityLabels: _settings.ShowCityLabels,
+                FillPolygons: _settings.FillPolygons
                 //hiddenAreas: _settings.hiddenAreas
             };
             localStorage.setItem(_settingsStoreName, JSON.stringify(settings));
@@ -138,28 +153,29 @@
             "Rhode Island":"RI", "South Carolina":"SC", "South Dakota":"SD", Tennessee:"TN", Texas:"TX", Utah:"UT",
             Vermont:"VT", Virginia:"VA", Washington:"WA", "West Virginia":"WV", Wisconsin:"WI", Wyoming:"WY",
             getAbbreviation: function(state) { return this[state];},
-            getStatesArray: function() { return Object.keys(WazeWrap.States).filter(x => {if(typeof WazeWrap.States[x] !== "function") return x;});},
-            getStateAbbrArray: function() { return Object.values(WazeWrap.States).filter(x => {if(typeof x !== "function") return x;});}
+            getStatesArray: function() { return Object.keys(States).filter(x => {if(typeof States[x] !== "function") return x;});},
+            getStateAbbrArray: function() { return Object.values(States).filter(x => {if(typeof x !== "function") return x;});}
         };
 
         InstallKML();
-        loadSettingsFromStorage();
+        loadSettings();
 
-        var layerid = 'wme_cities';
+        var layerid = 'wme_cities_overlay';
         var layerStyle = new OpenLayers.StyleMap({
             strokeDashstyle: 'solid',
             strokeColor: '#E6E6E6',
-            strokeOpacity: 0.4,
+            strokeOpacity: _settings.FillPolygons ? defaultStrokeOpacity : noFillStrokeOpacity,
             strokeWidth: 2,
-            fillOpacity: defaultFillOpacity,
+            fillOpacity: _settings.FillPolygons ? defaultFillOpacity : 0,
             fillColor: '#E6E6E6', //'#7cb342',
-            label : "${labelText}",
             fontColor: '#ffffff',
+            label : "${labelText}",
             labelOutlineColor: '#000000',
             labelOutlineWidth: 4,
             labelAlign: 'cm',
             fontSize: "16px"
         });
+
         _layer = new OL.Layer.Vector("Cities Overlay", {
             rendererOptions: { zIndexing: true },
             uniqueName: layerid,
@@ -174,24 +190,61 @@
         W.map.addLayer(_layer);
         W.map.events.register("moveend", null, updateCitiesLayer);
         //window.addEventListener('beforeunload', function saveOnClose() { saveSettingsToStorage(); }, false);
+        if(!_settings.ShowCityLabels)
+            _layer.styleMap.styles.default.defaultStyle.label = "";
+
         updateCitiesLayer();
 
         // Add the layer checkbox to the Layers menu.
         WazeWrap.Interface.AddLayerCheckbox("display", "Cities Overlay", _settings.layerVisible, layerToggled);
+
+        var $section = $("<div>", {style:"padding:8px 16px", id:"WMECitiesOverlaySettings"});
+        $section.html([
+            '<h4 style="margin-bottom:0px;"><b>WME Cities Overlay</b></h4>',
+            '<h6 style="margin-top:0px;">' + GM_info.script.version + '</h6>',
+            '<div id="divWMECOFillPolygons"><input type="checkbox" id="_cbCOFillPolygons" class="wmecoSettingsCheckbox" /><label for="_cbCOFillPolygons">Fill polygons</label></div>',
+            '<div id="divWMECOShowCityLabels"><input type="checkbox" id="_cbCOShowCityLabels" class="wmecoSettingsCheckbox" /><label for="_cbCOShowCityLabels">Show city labels</label></div>',
+            '</div>'
+        ].join(' '));
+
+        new WazeWrap.Interface.Tab('Cities', $section.html(), init2);
+    }
+
+    function init2(){
+        $('.wmecoSettingsCheckbox').change(function() {
+             var settingName = $(this)[0].id.substr(5);
+            _settings[settingName] = this.checked;
+            saveSettings();
+        });
+
+        setChecked('_cbCOShowCityLabels', _settings.ShowCityLabels);
+        setChecked('_cbCOFillPolygons', _settings.FillPolygons);
+
+        $('#_cbCOFillPolygons').change(function(){
+            //W.map.getLayerByUniqueName('wme_cities_overlay')
+            _layer.styleMap.styles.default.defaultStyle.fillOpacity = this.checked ? defaultFillOpacity : 0;
+            _layer.styleMap.styles.default.defaultStyle.strokeOpacity = this.checked ? defaultStrokeOpacity : noFillStrokeOpacity;
+            updatePolygons();
+        });
+
+        $('#_cbCOShowCityLabels').change(function(){
+            _layer.styleMap.styles.default.defaultStyle.label = this.checked ? "${labelText}" : "";
+            updatePolygons();
+        });
     }
 
     function layerToggled(visible) {
         _layer.setVisibility(visible);
-        saveSettingsToStorage();
+        saveSettings();
     }
 
-    function bootstrap() {
+    function bootstrap(tries = 1) {
         if (W && W.loginManager && W.loginManager.isLoggedIn() && W.model.states.top) {
             init();
             console.log('WME Cities Overlay:', 'Initialized');
-        } else {
+        } else if(tries < 1000){
             console.log('WME Cities Overlay: ', 'Bootstrap failed.  Trying again...');
-            window.setTimeout(() => bootstrap(), 500);
+            window.setTimeout(() => bootstrap(tries++), 100);
         }
     }
 
@@ -243,19 +296,20 @@ c&&"styleUrl"!=c){var d=this.createElementNS(this.kmlns,"Data");d.setAttribute("
                 if(typeof kmlCache[stateAbbr] == 'undefined'){
                     return $.get(`https://raw.githubusercontent.com/WazeDev/WME-Cities-Overlay/master/KMLs/${stateAbbr}_Cities.kml`, function(kml){
                         _kml = kml;
-                        parseKML();
+                        updatePolygons();
                     });
                 }
                 else{
                     _kml = kmlCache[stateAbbr];
-                    parseKML();
+                    updatePolygons();
                 }
             }
         }
     }
 
-    function parseKML(){
+    function updatePolygons(){
         var _features = GetFeaturesFromKMLString(_kml);
+        _layer.destroyFeatures();
         for(let i=0; i< _features.length; i++){
             _features[i].attributes.name = _features[i].attributes.name.replace('<at><openparen>', '').replace('<closeparen>','');
             _features[i].attributes.labelText = _features[i].attributes.name;
