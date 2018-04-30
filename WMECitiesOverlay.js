@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
-// @namespace    https://greasyfork.org/users/45389
-// @version      2018.04.30.02
+// @namespace    https://greasyfork.org/en/users/166843-wazedev
+// @version      2018.04.30.03
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
