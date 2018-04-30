@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/users/45389
-// @version      2018.04.30.01
+// @version      2018.04.30.02
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -42,7 +42,8 @@
         let _defaultsettings = {
             layerVisible: true,
             ShowCityLabels: true,
-            FillPolygons: true
+            FillPolygons: true,
+            HighlightFocusedCity: true
             //hiddenAreas: []
         };
         if(!_settings)
