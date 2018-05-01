@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2018.04.30.03
+// @version      2018.04.30.04
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -26,7 +26,8 @@
 
     let currState = "";
     let currCity = "";
-    let States = {};
+    let _US_States = {};
+    let _MX_States = {};
     let kmlCache = {};
 
     function isChecked(checkboxId) {
@@ -154,7 +155,7 @@
     }*/
 
     function init() {
-        States = {
+        _US_States = {
             Alabama:"AL", Alaska:"AK", Arizona:"AZ", Arkansas:"AR", California:"CA", Colorado:"CO", Connecticut:"CT",
             "District of Columbia":"DC", Delaware:"DE", Florida:"FL", Georgia:"GA", Hawaii:"HI", Idaho:"ID", Illinois:"IL", Indiana:"IN",
             Iowa:"IA", Kansas:"KS", Kentucky:"KY", Louisiana:"LA", Maine:"ME", Maryland:"MD", Massachusetts:"MA",
@@ -163,9 +164,19 @@
             "Rhode Island":"RI", "South Carolina":"SC", "South Dakota":"SD", Tennessee:"TN", Texas:"TX", Utah:"UT",
             Vermont:"VT", Virginia:"VA", Washington:"WA", "West Virginia":"WV", Wisconsin:"WI", Wyoming:"WY",
             getAbbreviation: function(state) { return this[state];},
-            getStatesArray: function() { return Object.keys(States).filter(x => {if(typeof States[x] !== "function") return x;});},
-            getStateAbbrArray: function() { return Object.values(States).filter(x => {if(typeof x !== "function") return x;});}
+            getStatesArray: function() { return Object.keys(_US_States).filter(x => {if(typeof _US_States[x] !== "function") return x;});},
+            getStateAbbrArray: function() { return Object.values(_US_States).filter(x => {if(typeof x !== "function") return x;});}
         };
+
+        _MX_States = {
+        Aguascalientes:"AGS", "Baja California":"BC", "Baja California Sur":"BCS",Campeche:"CAM", "Coahuila de Zaragoza":"COAH", Colima:"COL",
+            Chiapas:"CHIS", Durango:"DGO", "Ciudad de México":"CDMX", "Guanajuato":"GTO", Guerrero:"GRO", Hidalgo:"HGO", Jalisco:"JAL",
+            "Estado de México":"EM", "Michoacán de Ocampo":"MICH", Morelos:"MOR", Nayarit:"NAY", "Nuevo León":"NL", Oaxaca:"OAX", Puebla:"PUE",
+            "Quintana Roo":"QROO", "Querétaro":"QRO", "San Luis Potosí":"SLP", Sinaloa:"SIN", Sonora:"SON", Tabasco:"TAB", Tamaulipas:"TAM", Tlaxcala:"TLAX",
+            "Veracruz Ignacio de la Llave":"VER", "Yucatán":"YUC", "Zacatecas":"ZAC",
+            getAbbreviation: function(state) { return this[state];},
+            getStatesArray: function() { return Object.keys(_MX_States).filter(x => {if(typeof _MX_States[x] !== "function") return x;});},
+            getStateAbbrArray: function() { return Object.values(_MX_States).filter(x => {if(typeof x !== "function") return x;});}};
 
         InstallKML();
         loadSettings();
@@ -354,12 +365,17 @@ c&&"styleUrl"!=c){var d=this.createElementNS(this.kmlns,"Data");d.setAttribute("
         {
             _layer.destroyFeatures();
             currState = W.model.states.top.name;
+            let countryAbbr = W.model.countries.top.abbr;
+            let stateAbbr;
 
-            let stateAbbr = States.getAbbreviation(currState);
+            if(countryAbbr === "US")
+                stateAbbr = _US_States.getAbbreviation(currState);
+            else if(countryAbbr === "MX")
+                stateAbbr = _MX_States.getAbbreviation(currState);
 
             if(typeof stateAbbr !== "undefined"){
                 if(typeof kmlCache[stateAbbr] == 'undefined'){
-                    return $.get(`https://raw.githubusercontent.com/WazeDev/WME-Cities-Overlay/master/KMLs/${stateAbbr}_Cities.kml`, function(kml){
+                    return $.get(`https://raw.githubusercontent.com/WazeDev/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${stateAbbr}_Cities.kml`, function(kml){
                         _kml = kml;
                         updatePolygons();
                     });
