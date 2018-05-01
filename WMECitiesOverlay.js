@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
-// @namespace    https://greasyfork.org/users/45389
-// @version      2018.04.24.01
+// @namespace    https://greasyfork.org/en/users/166843-wazedev
+// @version      2018.04.30.04
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -13,7 +13,7 @@
 (function() {
     'use strict';
 
-    var _color = '#7cb342';
+    var _color = '#E6E6E6';
     var _settingsStoreName = '_wme_cities';
     var _settings;
     var _features;
@@ -21,29 +21,47 @@
     var _layerName = 'Cities Overlay';
     var _layer = null;
     var defaultFillOpacity = 0.3;
+    var defaultStrokeOpacity = 0.6;
+    var noFillStrokeOpacity = 0.9;
 
     let currState = "";
-    let States = {};
+    let currCity = "";
+    let _US_States = {};
+    let _MX_States = {};
     let kmlCache = {};
 
-    function loadSettingsFromStorage() {
+    function isChecked(checkboxId) {
+        return $('#' + checkboxId).is(':checked');
+    }
+
+    function setChecked(checkboxId, checked) {
+        $('#' + checkboxId).prop('checked', checked);
+    }
+
+    function loadSettings() {
         _settings = $.parseJSON(localStorage.getItem(_settingsStoreName));
-        if(!_settings) {
-            _settings = {
-                layerVisible: true
-                //hiddenAreas: []
-            };
-        } else {
-            _settings.layerVisible = (_settings.layerVisible === true);
-            //_settings.hiddenAreas = _settings.hiddenAreas || [];
+        let _defaultsettings = {
+            layerVisible: true,
+            ShowCityLabels: true,
+            FillPolygons: true,
+            HighlightFocusedCity: true
+            //hiddenAreas: []
+        };
+        if(!_settings)
+            _settings = _defaultsettings;
+        for (var prop in _defaultsettings) {
+            if (!_settings.hasOwnProperty(prop))
+                _settings[prop] = _defaultsettings[prop];
         }
     }
 
-    function saveSettingsToStorage() {
+    function saveSettings() {
         if (localStorage) {
             var settings = {
-                layerVisible: _layer.visibility
-                //hiddenAreas: _settings.hiddenAreas
+                layerVisible: _layer.visibility,
+                ShowCityLabels: _settings.ShowCityLabels,
+                FillPolygons: _settings.FillPolygons,
+                HighlightFocusedCity: _settings.HighlightFocusedCity
             };
             localStorage.setItem(_settingsStoreName, JSON.stringify(settings));
         }
@@ -57,7 +75,27 @@
         return format.read(strKML);
     }
 
+    function findCurrCity(){
+        let newCity = "";
+        var mapCenter = new OpenLayers.Geometry.Point(W.map.center.lon,W.map.center.lat);
+        for (var i=0;i<_layer.features.length;i++){
+            var feature = _layer.features[i];
+            if(pointInFeature(feature.geometry, mapCenter)){
+                newCity = feature.attributes.name;
+                break;
+            }
+        }
+        return newCity;
+    }
+
     async function updateCitiesLayer(){
+        let newCurrCity = findCurrCity();
+
+        if(currCity != newCurrCity){
+            currCity = newCurrCity;
+            _layer.redraw();
+        }
+
         await updateCityPolygons();
         updateDistrictNameDisplay();
     }
@@ -66,31 +104,19 @@
         $('.wmecitiesoverlay-region').remove();
         if (_layer !== null) {
             if(_layer.features.length > 0){
-                var mapCenter = new OpenLayers.Geometry.Point(W.map.center.lon,W.map.center.lat);
-                for (var i=0;i<_layer.features.length;i++){
-                    var feature = _layer.features[i];
-                    var color;
-                    var text = '';
-                    var num;
-                    var url;
-                    if(pointInFeature(feature.geometry, mapCenter)){
-                        text = feature.attributes.name;
-                        color = '#00ffff';
-                        var $div = $('<div>', {id:'wmecitiesoverlay', class:"wmecitiesoverlay-region", style:'display:inline-block;margin-left:10px;', title:'Click to toggle color on/off for this group'})
-                        .css({color:color, cursor:"pointer"})
-                        .click(toggleAreaFill);
-                        var $span = $('<span>').css({display:'inline-block'});
-                        $span.text(text).appendTo($div);
-                        $('.location-info-region').parent().append($div);
-                        if (color) {
-                            break;
-                        }
-                    }
+                if(currCity != ""){
+                    let color = '#00ffff';
+                    var $div = $('<div>', {id:'wmecitiesoverlay', class:"wmecitiesoverlay-region", style:'display:inline-block;margin-left:10px;'})//, title:'Click to toggle color on/off for this group'})
+                    .css({color:color, cursor:"pointer"});
+                    //.click(toggleAreaFill);
+                    var $span = $('<span>').css({display:'inline-block'});
+                    $span.text(currCity).appendTo($div);
+                    $('.location-info-region').parent().append($div);
                 }
             }
-            else
-                _layer.destroyFeatures();
         }
+        else
+            _layer.destroyFeatures();
     }
 
     function pointInFeature(geometry, mapCenter){
@@ -105,7 +131,7 @@
         return false;
     }
 
-    function toggleAreaFill() {
+    /*function toggleAreaFill() {
         var text = $('#wmecitiesoverlay span').text();
         if (text) {
             var match = text.match(/WV-(\d+)/);
@@ -126,10 +152,10 @@
                 _layer.redraw();
             }
         }
-    }
+    }*/
 
     function init() {
-        States = {
+        _US_States = {
             Alabama:"AL", Alaska:"AK", Arizona:"AZ", Arkansas:"AR", California:"CA", Colorado:"CO", Connecticut:"CT",
             "District of Columbia":"DC", Delaware:"DE", Florida:"FL", Georgia:"GA", Hawaii:"HI", Idaho:"ID", Illinois:"IL", Indiana:"IN",
             Iowa:"IA", Kansas:"KS", Kentucky:"KY", Louisiana:"LA", Maine:"ME", Maryland:"MD", Massachusetts:"MA",
@@ -138,28 +164,39 @@
             "Rhode Island":"RI", "South Carolina":"SC", "South Dakota":"SD", Tennessee:"TN", Texas:"TX", Utah:"UT",
             Vermont:"VT", Virginia:"VA", Washington:"WA", "West Virginia":"WV", Wisconsin:"WI", Wyoming:"WY",
             getAbbreviation: function(state) { return this[state];},
-            getStatesArray: function() { return Object.keys(WazeWrap.States).filter(x => {if(typeof WazeWrap.States[x] !== "function") return x;});},
-            getStateAbbrArray: function() { return Object.values(WazeWrap.States).filter(x => {if(typeof x !== "function") return x;});}
+            getStatesArray: function() { return Object.keys(_US_States).filter(x => {if(typeof _US_States[x] !== "function") return x;});},
+            getStateAbbrArray: function() { return Object.values(_US_States).filter(x => {if(typeof x !== "function") return x;});}
         };
 
-        InstallKML();
-        loadSettingsFromStorage();
+        _MX_States = {
+        Aguascalientes:"AGS", "Baja California":"BC", "Baja California Sur":"BCS",Campeche:"CAM", "Coahuila de Zaragoza":"COAH", Colima:"COL",
+            Chiapas:"CHIS", Durango:"DGO", "Ciudad de México":"CDMX", "Guanajuato":"GTO", Guerrero:"GRO", Hidalgo:"HGO", Jalisco:"JAL",
+            "Estado de México":"EM", "Michoacán de Ocampo":"MICH", Morelos:"MOR", Nayarit:"NAY", "Nuevo León":"NL", Oaxaca:"OAX", Puebla:"PUE",
+            "Quintana Roo":"QROO", "Querétaro":"QRO", "San Luis Potosí":"SLP", Sinaloa:"SIN", Sonora:"SON", Tabasco:"TAB", Tamaulipas:"TAM", Tlaxcala:"TLAX",
+            "Veracruz Ignacio de la Llave":"VER", "Yucatán":"YUC", "Zacatecas":"ZAC",
+            getAbbreviation: function(state) { return this[state];},
+            getStatesArray: function() { return Object.keys(_MX_States).filter(x => {if(typeof _MX_States[x] !== "function") return x;});},
+            getStateAbbrArray: function() { return Object.values(_MX_States).filter(x => {if(typeof x !== "function") return x;});}};
 
-        var layerid = 'wme_cities';
+        InstallKML();
+        loadSettings();
+
+        var layerid = 'wme_cities_overlay';
         var layerStyle = new OpenLayers.StyleMap({
             strokeDashstyle: 'solid',
-            strokeColor: '#E6E6E6',
-            strokeOpacity: 0.4,
+            strokeColor: _color,
+            strokeOpacity: _settings.FillPolygons ? defaultStrokeOpacity : noFillStrokeOpacity,
             strokeWidth: 2,
-            fillOpacity: defaultFillOpacity,
-            fillColor: '#E6E6E6', //'#7cb342',
-            label : "${labelText}",
+            fillOpacity: _settings.FillPolygons ? defaultFillOpacity : 0,
+            fillColor: _color,
             fontColor: '#ffffff',
+            label : "${labelText}",
             labelOutlineColor: '#000000',
             labelOutlineWidth: 4,
             labelAlign: 'cm',
             fontSize: "16px"
         });
+
         _layer = new OL.Layer.Vector("Cities Overlay", {
             rendererOptions: { zIndexing: true },
             uniqueName: layerid,
@@ -173,25 +210,117 @@
         I18n.translations[I18n.locale].layers.name[layerid] = "Cities Overlay";
         W.map.addLayer(_layer);
         W.map.events.register("moveend", null, updateCitiesLayer);
-        //window.addEventListener('beforeunload', function saveOnClose() { saveSettingsToStorage(); }, false);
+
+        if(!_settings.ShowCityLabels)
+            _layer.styleMap.styles.default.defaultStyle.label = "";
+
         updateCitiesLayer();
 
         // Add the layer checkbox to the Layers menu.
         WazeWrap.Interface.AddLayerCheckbox("display", "Cities Overlay", _settings.layerVisible, layerToggled);
+
+        var $section = $("<div>", {style:"padding:8px 16px", id:"WMECitiesOverlaySettings"});
+        $section.html([
+            '<h4 style="margin-bottom:0px;"><b>WME Cities Overlay</b></h4>',
+            '<h6 style="margin-top:0px;">' + GM_info.script.version + '</h6>',
+            '<div id="divWMECOFillPolygons"><input type="checkbox" id="_cbCOFillPolygons" class="wmecoSettingsCheckbox" /><label for="_cbCOFillPolygons">Fill polygons</label></div>',
+            '<div id="divWMECOShowCityLabels"><input type="checkbox" id="_cbCOShowCityLabels" class="wmecoSettingsCheckbox" /><label for="_cbCOShowCityLabels">Show city labels</label></div>',
+            '<div id="divWMECOHighlightFocusedCity"><input type="checkbox" id="_cbCOHighlightFocusedCity" class="wmecoSettingsCheckbox" /><label for="_cbCOHighlightFocusedCity">Highlight focused city</label></div>',
+            '</div>'
+        ].join(' '));
+
+        new WazeWrap.Interface.Tab('Cities', $section.html(), init2);
+    }
+
+    function init2(){
+        $('.wmecoSettingsCheckbox').change(function() {
+             var settingName = $(this)[0].id.substr(5);
+            _settings[settingName] = this.checked;
+            saveSettings();
+        });
+
+        setChecked('_cbCOShowCityLabels', _settings.ShowCityLabels);
+        setChecked('_cbCOFillPolygons', _settings.FillPolygons);
+        setChecked('_cbCOHighlightFocusedCity', _settings.HighlightFocusedCity);
+
+        $('#_cbCOFillPolygons').change(function(){
+            _layer.styleMap.styles.default.defaultStyle.fillOpacity = this.checked ? defaultFillOpacity : 0;
+            _layer.styleMap.styles.default.defaultStyle.strokeOpacity = this.checked ? defaultStrokeOpacity : noFillStrokeOpacity;
+            _layer.redraw();
+        });
+
+        $('#_cbCOShowCityLabels').change(function(){
+            _layer.styleMap.styles.default.defaultStyle.label = this.checked ? "${labelText}" : "";
+            _layer.redraw();
+        });
+
+        $('#_cbCOHighlightFocusedCity').change(function(){
+            if(this.checked){
+                insertHighlightingRules();
+            }
+            else{
+                let index = _layer.styleMap.styles.default.rules.findIndex(function(e){ return e.name == "WMECOHighlightCurr";});
+                if(index > -1)
+                    _layer.styleMap.styles.default.rules.splice(index, 1);
+
+                index = _layer.styleMap.styles.default.rules.findIndex(function(e){ return e.name == "WMECONoHighlight";});
+                if(index > -1)
+                    _layer.styleMap.styles.default.rules.splice(index, 1);
+                _layer.redraw();
+            }
+        });
+
+        currCity = findCurrCity();
+
+        if(_settings.HighlightFocusedCity)
+            insertHighlightingRules();
+    }
+
+    function insertHighlightingRules(){
+        //********** Rules ***********
+        let myRule = new W.Rule({
+            filter: new OL.Filter.Comparison({
+                type: '==',
+                evaluate: function(cityFeature) {
+                    return cityFeature.attributes.name === currCity;
+                }
+            }),
+            symbolizer: {
+                strokeColor: '#f7ad25',
+                fillColor: '#f7ad25'
+            },
+            name: "WMECOHighlightCurr"
+        });
+        let myRule2 = new W.Rule({
+            filter: new OL.Filter.Comparison({
+                type: '!=',
+                evaluate: function(cityFeature) {
+                    return cityFeature.attributes.name != currCity;
+                }
+            }),
+            symbolizer: {
+                strokeColor: _color,
+                fillColor: _color
+            },
+            name: "WMECONoHighlight"
+        });
+        _layer.styleMap.styles['default'].rules.push(myRule);
+        _layer.styleMap.styles['default'].rules.push(myRule2);
+        _layer.redraw();
     }
 
     function layerToggled(visible) {
         _layer.setVisibility(visible);
-        saveSettingsToStorage();
+        saveSettings();
     }
 
-    function bootstrap() {
-        if (W && W.loginManager && W.loginManager.isLoggedIn() && W.model.states.top) {
+    function bootstrap(tries = 1) {
+        if (W && W.loginManager && W.loginManager.isLoggedIn() && W.model.states.top && WazeWrap.Ready) {
             init();
             console.log('WME Cities Overlay:', 'Initialized');
-        } else {
+        } else if(tries < 1000){
             console.log('WME Cities Overlay: ', 'Bootstrap failed.  Trying again...');
-            window.setTimeout(() => bootstrap(), 500);
+            window.setTimeout(() => bootstrap(tries++), 100);
         }
     }
 
@@ -236,26 +365,32 @@ c&&"styleUrl"!=c){var d=this.createElementNS(this.kmlns,"Data");d.setAttribute("
         {
             _layer.destroyFeatures();
             currState = W.model.states.top.name;
+            let countryAbbr = W.model.countries.top.abbr;
+            let stateAbbr;
 
-            let stateAbbr = States.getAbbreviation(currState);
+            if(countryAbbr === "US")
+                stateAbbr = _US_States.getAbbreviation(currState);
+            else if(countryAbbr === "MX")
+                stateAbbr = _MX_States.getAbbreviation(currState);
 
             if(typeof stateAbbr !== "undefined"){
                 if(typeof kmlCache[stateAbbr] == 'undefined'){
-                    return $.get(`https://raw.githubusercontent.com/WazeDev/WME-Cities-Overlay/master/KMLs/${stateAbbr}_Cities.kml`, function(kml){
+                    return $.get(`https://raw.githubusercontent.com/WazeDev/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${stateAbbr}_Cities.kml`, function(kml){
                         _kml = kml;
-                        parseKML();
+                        updatePolygons();
                     });
                 }
                 else{
                     _kml = kmlCache[stateAbbr];
-                    parseKML();
+                    updatePolygons();
                 }
             }
         }
     }
 
-    function parseKML(){
+    function updatePolygons(){
         var _features = GetFeaturesFromKMLString(_kml);
+        _layer.destroyFeatures();
         for(let i=0; i< _features.length; i++){
             _features[i].attributes.name = _features[i].attributes.name.replace('<at><openparen>', '').replace('<closeparen>','');
             _features[i].attributes.labelText = _features[i].attributes.name;
