@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2018.04.30.04
+// @version      2018.05.01.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -69,7 +69,7 @@
 
     function GetFeaturesFromKMLString(strKML) {
         var format = new OpenLayers.Format.KML({
-            'internalProjection': Waze.map.baseLayer.projection,
+            'internalProjection': W.map.baseLayer.projection,
             'externalProjection': new OpenLayers.Projection("EPSG:4326")
         });
         return format.read(strKML);
