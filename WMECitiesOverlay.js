@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2018.05.02.02
+// @version      2018.05.14.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -220,8 +220,8 @@
 
         var $section = $("<div>", {style:"padding:8px 16px", id:"WMECitiesOverlaySettings"});
         $section.html([
-            '<h4 style="margin-bottom:0px;"><b>WME Cities Overlay</b></h4>',
-            '<h6 style="margin-top:0px;">' + GM_info.script.version + '</h6>',
+            `<h4 style="margin-bottom:0px;"><i id="citiesPower" class="fa fa-power-off" aria-hidden="true" style="color:${_settings.layerVisible ? 'rgb(0,180,0)' : 'black'}; cursor:pointer;"></i> <b>WME Cities Overlay</b></h4>`,
+            `<h6 style="margin-top:0px;">${GM_info.script.version}</h6>`,
             '<div id="divWMECOFillPolygons"><input type="checkbox" id="_cbCOFillPolygons" class="wmecoSettingsCheckbox" /><label for="_cbCOFillPolygons">Fill polygons</label></div>',
             '<div id="divWMECOShowCityLabels"><input type="checkbox" id="_cbCOShowCityLabels" class="wmecoSettingsCheckbox" /><label for="_cbCOShowCityLabels">Show city labels</label></div>',
             '<div id="divWMECOHighlightFocusedCity"><input type="checkbox" id="_cbCOHighlightFocusedCity" class="wmecoSettingsCheckbox" /><label for="_cbCOHighlightFocusedCity">Highlight focused city</label></div>',
@@ -241,6 +241,11 @@
         setChecked('_cbCOShowCityLabels', _settings.ShowCityLabels);
         setChecked('_cbCOFillPolygons', _settings.FillPolygons);
         setChecked('_cbCOHighlightFocusedCity', _settings.HighlightFocusedCity);
+
+        $('#citiesPower').click(function(){
+            _settings.layerVisible = !_settings.layerVisible;
+            layerToggled(_settings.layerVisible);
+        });
 
         $('#_cbCOFillPolygons').change(function(){
             _layer.styleMap.styles.default.defaultStyle.fillOpacity = this.checked ? defaultFillOpacity : 0;
@@ -309,7 +314,12 @@
     }
 
     function layerToggled(visible) {
+        _settings.layerVisible = visible;
         _layer.setVisibility(visible);
+        if(visible)
+            $('#citiesPower').css("color", "rgb(0,180,0)");
+        else
+            $('#citiesPower').css("color", "black");
         saveSettings();
     }
 
