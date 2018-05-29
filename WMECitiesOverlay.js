@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2018.05.14.01
+// @version      2018.05.29.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -23,6 +23,7 @@
     var defaultFillOpacity = 0.3;
     var defaultStrokeOpacity = 0.6;
     var noFillStrokeOpacity = 0.9;
+    var repoOwner = 'WazeDev';
 
     let currState = "";
     let currCity = "";
@@ -350,7 +351,7 @@
 
             if(typeof stateAbbr !== "undefined"){
                 if(typeof kmlCache[stateAbbr] == 'undefined'){
-                    return $.get(`https://raw.githubusercontent.com/WazeDev/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${stateAbbr}_Cities.kml`, function(kml){
+                    return $.get(`https://raw.githubusercontent.com/${repoOwner}/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${stateAbbr}_Cities.kml`, function(kml){
                         _kml = kml;
                         updatePolygons();
                     });
