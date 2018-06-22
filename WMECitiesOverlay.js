@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2018.06.05.01
+// @version      2018.06.22.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
 // @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
+// @require      https://greasyfork.org/scripts/369729-wme-cities-overlay-db/code/WME%20Cities%20Overlay%20DB.js
 // @license      GNU GPLv3
 // @grant        none
 // ==/UserScript==
@@ -30,6 +31,9 @@
     let _US_States = {};
     let _MX_States = {};
     let kmlCache = {};
+
+    let indexedDBSupport = false;
+    let citiesDB;
 
     function isChecked(checkboxId) {
         return $('#' + checkboxId).is(':checked');
@@ -91,12 +95,10 @@
 
     async function updateCitiesLayer(){
         let newCurrCity = findCurrCity();
-
         if(currCity != newCurrCity){
             currCity = newCurrCity;
             _layer.redraw();
         }
-
         await updateCityPolygons();
         updateDistrictNameDisplay();
     }
@@ -215,7 +217,6 @@
             _layer.styleMap.styles.default.defaultStyle.label = "";
 
         updateCitiesLayer();
-
         // Add the layer checkbox to the Layers menu.
         WazeWrap.Interface.AddLayerCheckbox("display", "Cities Overlay", _settings.layerVisible, layerToggled);
 
@@ -324,19 +325,11 @@
         saveSettings();
     }
 
-    function bootstrap(tries = 1) {
-        if (W && W.loginManager && W.loginManager.isLoggedIn() && W.model.states.top && WazeWrap.Ready) {
-            init();
-            console.log('WME Cities Overlay:', 'Initialized');
-        } else if(tries < 1000){
-            console.log('WME Cities Overlay: ', 'Bootstrap failed.  Trying again...');
-            window.setTimeout(() => bootstrap(tries++), 100);
-        }
+    async function getKML(url){
+        return await $.get(url);
     }
 
-    bootstrap();
-
-    function updateCityPolygons(){
+    async function updateCityPolygons(){
         if(currState != W.model.states.top.name)
         {
             _layer.destroyFeatures();
@@ -351,10 +344,27 @@
 
             if(typeof stateAbbr !== "undefined"){
                 if(typeof kmlCache[stateAbbr] == 'undefined'){
-                    return $.get(`https://raw.githubusercontent.com/${repoOwner}/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${stateAbbr}_Cities.kml`, function(kml){
+                    //get the current state info from the store.
+                    var request = await idbKeyval.get(`${countryAbbr}_states_cities`, stateAbbr);
+
+                    //if the store didn't have the state, look it up from github and enter it in the store
+                    if(!request){
+                        let kml = await getKML(`https://raw.githubusercontent.com/${repoOwner}/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${stateAbbr}_Cities.kml`);
                         _kml = kml;
                         updatePolygons();
-                    });
+
+                        await idbKeyval.set(`${countryAbbr}_states_cities`, {
+                            kml: kml,
+                            state: stateAbbr,
+                            kmlsize: 0
+                        });
+                        kmlCache[stateAbbr] = _kml; //keep a local cache so we don't have to hit the indexeddb repeatedly if the user crosses state lines multiple times
+                    }
+                    else{
+                        _kml = request.kml;
+                        kmlCache[stateAbbr] = _kml;//keep a local cache so we don't have to hit the indexeddb repeatedly if the user crosses state lines multiple times
+                        updatePolygons();
+                    }
                 }
                 else{
                     _kml = kmlCache[stateAbbr];
@@ -374,4 +384,16 @@
 
         _layer.addFeatures(_features);
     }
+
+    function bootstrap(tries = 1) {
+        if (W && W.loginManager && W.loginManager.isLoggedIn() && W.model.states.top && WazeWrap.Ready) {
+            init();
+            console.log('WME Cities Overlay:', 'Initialized');
+        } else if(tries < 1000){
+            console.log('WME Cities Overlay: ', 'Bootstrap failed.  Trying again...');
+            window.setTimeout(() => bootstrap(tries++), 100);
+        }
+    }
+
+    bootstrap();
 })();
