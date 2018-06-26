@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2018.06.26.01
+// @version      2018.06.26.02
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -350,7 +350,7 @@
         if(_settings.HighlightFocusedCity)
             insertHighlightingRules();
 
-        if(_settings.AutoUpdateKMLs)
+        if(_settings.layerVisible && _settings.AutoUpdateKMLs)
             updateAllMaps();
     }
 
