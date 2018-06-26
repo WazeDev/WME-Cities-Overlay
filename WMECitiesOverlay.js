@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2018.06.22.01
+// @version      2018.06.26.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -49,7 +49,8 @@
             layerVisible: true,
             ShowCityLabels: true,
             FillPolygons: true,
-            HighlightFocusedCity: true
+            HighlightFocusedCity: true,
+            AutoUpdateKMLs: true
             //hiddenAreas: []
         };
         if(!_settings)
@@ -66,7 +67,8 @@
                 layerVisible: _layer.visibility,
                 ShowCityLabels: _settings.ShowCityLabels,
                 FillPolygons: _settings.FillPolygons,
-                HighlightFocusedCity: _settings.HighlightFocusedCity
+                HighlightFocusedCity: _settings.HighlightFocusedCity,
+                AutoUpdateKMLs: _settings.AutoUpdateKMLs
             };
             localStorage.setItem(_settingsStoreName, JSON.stringify(settings));
         }
@@ -134,6 +136,62 @@
         return false;
     }
 
+    async function getKML(url){
+        return await $.get(url);
+    }
+
+    async function updateAllMaps(){
+        let countryAbbr = W.model.countries.top.abbr;
+        let keys = await idbKeyval.keys(`${countryAbbr}_states_cities`);
+        let updatedCount = 0;
+        let updatedStates = "";
+        let countryAbbrObj;
+
+        if(countryAbbr === "US")
+            countryAbbrObj = _US_States;
+        else if(countryAbbr === "MX")
+            countryAbbrObj = _MX_States;
+
+        let KMLinfoArr = await $.get(`https://api.github.com/repos/WazeDev/WME-Cities-Overlay/contents/KMLs/${countryAbbr}`);
+        let state;
+        for(let i=0; i<keys.length; i++){
+            state = keys[i];
+
+            for(let j=0; j<KMLinfoArr.length; j++){
+                if(KMLinfoArr[j].name === `${state}_Cities.kml`){ //check the size in db against server - if different, update db
+                    let stateObj = await idbKeyval.get(`${countryAbbr}_states_cities`, state);
+
+                    if(stateObj.kmlsize !== KMLinfoArr[j].size){
+                        let kml = await getKML(`https://raw.githubusercontent.com/${repoOwner}/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${state}_Cities.kml`);
+
+                        if(state === countryAbbrObj.getAbbreviation(currState))
+                            _kml = kml;
+
+                        await idbKeyval.set(`${countryAbbr}_states_cities`, {
+                            kml: kml,
+                            state: state,
+                            kmlsize: KMLinfoArr[j].size
+                        });
+                        if(kmlCache[state] != null)
+                            kmlCache[state] = _kml;
+                        if(updatedStates != "")
+                            updatedStates += `, ${state}`;
+                        else
+                            updatedStates += state;
+                        updatedCount+=1;
+                    }
+                    break;
+                }
+            }
+        }
+        if(updatedCount > 0)
+            $('#WMECOupdateStatus').text(`${updatedCount} state file${updatedCount >1 ? "s" : ""} updated - ${updatedStates}`);
+        else
+            $('#WMECOupdateStatus').text("No updates available");
+
+        updatePolygons();
+    }
+
     /*function toggleAreaFill() {
         var text = $('#wmecitiesoverlay span').text();
         if (text) {
@@ -167,6 +225,7 @@
             "Rhode Island":"RI", "South Carolina":"SC", "South Dakota":"SD", Tennessee:"TN", Texas:"TX", Utah:"UT",
             Vermont:"VT", Virginia:"VA", Washington:"WA", "West Virginia":"WV", Wisconsin:"WI", Wyoming:"WY",
             getAbbreviation: function(state) { return this[state];},
+            getStateFromAbbr: function(abbr) { return Object.entries(_US_States).filter(x => {if(x[1] == abbr) return x})[0][0];},
             getStatesArray: function() { return Object.keys(_US_States).filter(x => {if(typeof _US_States[x] !== "function") return x;});},
             getStateAbbrArray: function() { return Object.values(_US_States).filter(x => {if(typeof x !== "function") return x;});}
         };
@@ -178,6 +237,7 @@
             "Quintana Roo":"QROO", "Querétaro":"QRO", "San Luis Potosí":"SLP", Sinaloa:"SIN", Sonora:"SON", Tabasco:"TAB", Tamaulipas:"TAM", Tlaxcala:"TLAX",
             "Veracruz Ignacio de la Llave":"VER", "Yucatán":"YUC", "Zacatecas":"ZAC",
             getAbbreviation: function(state) { return this[state];},
+            getStateFromAbbr: function(abbr) { return Object.entries(_MX_States).filter(x => {if(x[1] == abbr) return x})[0][0];},
             getStatesArray: function() { return Object.keys(_MX_States).filter(x => {if(typeof _MX_States[x] !== "function") return x;});},
             getStateAbbrArray: function() { return Object.values(_MX_States).filter(x => {if(typeof x !== "function") return x;});}};
 
@@ -185,17 +245,13 @@
 
         var layerid = 'wme_cities_overlay';
         var layerStyle = new OpenLayers.StyleMap({
-            strokeDashstyle: 'solid',
-            strokeColor: _color,
+            strokeDashstyle: 'solid', strokeColor: _color,
             strokeOpacity: _settings.FillPolygons ? defaultStrokeOpacity : noFillStrokeOpacity,
             strokeWidth: 2,
             fillOpacity: _settings.FillPolygons ? defaultFillOpacity : 0,
-            fillColor: _color,
-            fontColor: '#ffffff',
-            label : "${labelText}",
-            labelOutlineColor: '#000000',
-            labelOutlineWidth: 4,
-            labelAlign: 'cm',
+            fillColor: _color,fontColor: '#ffffff',
+            label : "${labelText}", labelOutlineColor: '#000000',
+            labelOutlineWidth: 4, labelAlign: 'cm',
             fontSize: "16px"
         });
 
@@ -211,7 +267,8 @@
         });
         I18n.translations[I18n.locale].layers.name[layerid] = "Cities Overlay";
         W.map.addLayer(_layer);
-        W.map.events.register("moveend", null, updateCitiesLayer);
+        if(_settings.layerVisible) //"reusing" this setting - should have set it up to enable/disable the moveend handler from the start instead of just hiding the layer. Durp
+            W.map.events.register("moveend", null, updateCitiesLayer);
 
         if(!_settings.ShowCityLabels)
             _layer.styleMap.styles.default.defaultStyle.label = "";
@@ -227,6 +284,11 @@
             '<div id="divWMECOFillPolygons"><input type="checkbox" id="_cbCOFillPolygons" class="wmecoSettingsCheckbox" /><label for="_cbCOFillPolygons">Fill polygons</label></div>',
             '<div id="divWMECOShowCityLabels"><input type="checkbox" id="_cbCOShowCityLabels" class="wmecoSettingsCheckbox" /><label for="_cbCOShowCityLabels">Show city labels</label></div>',
             '<div id="divWMECOHighlightFocusedCity"><input type="checkbox" id="_cbCOHighlightFocusedCity" class="wmecoSettingsCheckbox" /><label for="_cbCOHighlightFocusedCity">Highlight focused city</label></div>',
+            '<fieldset id="fieldUpdates" style="border: 1px solid silver; padding: 8px; border-radius: 4px;">',
+            '<legend style="margin-bottom:0px; border-bottom-style:none;width:auto;"><h4>Update Settings</h4></legend>',
+            '<div id="divWMECOUpdateMaps" title="Checks for new state files for the current country"><button id="WMECOupdateMaps" type="button">Update database</button></div>',
+            '<div id="WMECOupdateStatus"></div>',
+            '<div id="divWMECOAutoUpdateKMLs" title="Checks for updated state files for the current country when WME loads"><input type="checkbox" id="_cbCOAutoUpdateKMLs" class="wmecoSettingsCheckbox" /><label for="_cbCOAutoUpdateKMLs">Automatically update database</label></div>','</fieldset>',
             '</div>'
         ].join(' '));
 
@@ -243,11 +305,18 @@
         setChecked('_cbCOShowCityLabels', _settings.ShowCityLabels);
         setChecked('_cbCOFillPolygons', _settings.FillPolygons);
         setChecked('_cbCOHighlightFocusedCity', _settings.HighlightFocusedCity);
+        setChecked('_cbCOAutoUpdateKMLs', _settings.AutoUpdateKMLs);
 
         $('#citiesPower').click(function(){
             _settings.layerVisible = !_settings.layerVisible;
             layerToggled(_settings.layerVisible);
+            if(_settings.layerVisible)
+                W.map.events.register("moveend", null, updateCitiesLayer);
+            else
+                W.map.events.unregister("moveend", null, updateCitiesLayer);
         });
+
+        $('#WMECOupdateMaps').click(updateAllMaps);
 
         $('#_cbCOFillPolygons').change(function(){
             _layer.styleMap.styles.default.defaultStyle.fillOpacity = this.checked ? defaultFillOpacity : 0;
@@ -280,10 +349,13 @@
 
         if(_settings.HighlightFocusedCity)
             insertHighlightingRules();
+
+        if(_settings.AutoUpdateKMLs)
+            updateAllMaps();
     }
 
     function insertHighlightingRules(){
-        //********** Rules ***********
+        //********** Highlighting Rules ***********
         let myRule = new W.Rule({
             filter: new OL.Filter.Comparison({
                 type: '==',
@@ -323,10 +395,6 @@
         else
             $('#citiesPower').css("color", "black");
         saveSettings();
-    }
-
-    async function getKML(url){
-        return await $.get(url);
     }
 
     async function updateCityPolygons(){
