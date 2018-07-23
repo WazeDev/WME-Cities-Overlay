@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2018.06.26.02
+// @version      2018.07.22.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -9,6 +9,7 @@
 // @require      https://greasyfork.org/scripts/369729-wme-cities-overlay-db/code/WME%20Cities%20Overlay%20DB.js
 // @license      GNU GPLv3
 // @grant        none
+// @contributionURL https://github.com/WazeDev/Thank-The-Authors
 // ==/UserScript==
 
 (function() {
