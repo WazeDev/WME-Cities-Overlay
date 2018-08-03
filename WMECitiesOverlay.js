@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2018.07.22.01
+// @version      2018.08.03.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -112,12 +112,12 @@
             if(_layer.features.length > 0){
                 if(currCity != ""){
                     let color = '#00ffff';
-                    var $div = $('<div>', {id:'wmecitiesoverlay', class:"wmecitiesoverlay-region", style:'display:inline-block;margin-left:10px;'})//, title:'Click to toggle color on/off for this group'})
+                    var $div = $('<div>', {id:'wmecitiesoverlay', class:"wmecitiesoverlay-region", style:'float:left; margin-left:10px;'})//, title:'Click to toggle color on/off for this group'})
                     .css({color:color, cursor:"pointer"});
                     //.click(toggleAreaFill);
                     var $span = $('<span>').css({display:'inline-block'});
                     $span.text(currCity).appendTo($div);
-                    $('.location-info-region').parent().append($div);
+                    $('.location-info-region').after($div);
                 }
             }
         }
