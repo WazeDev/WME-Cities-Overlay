@@ -455,7 +455,7 @@
     }
 
     function bootstrap(tries = 1) {
-        if (W && W.loginManager && W.loginManager.isLoggedIn() && W.model.states.top && WazeWrap.Ready) {
+        if (W && W.loginManager && W.loginManager.user && W.model.states.top && WazeWrap.Ready) {
             init();
             console.log('WME Cities Overlay:', 'Initialized');
         } else if(tries < 1000){
