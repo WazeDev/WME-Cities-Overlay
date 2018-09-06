@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2018.08.17.01
+// @version      2018.09.06.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -11,6 +11,15 @@
 // @grant        none
 // @contributionURL https://github.com/WazeDev/Thank-The-Authors
 // ==/UserScript==
+
+/* global W */
+/* global OL */
+/* ecmaVersion 2017 */
+/* global $ */
+/* global idbKeyval */
+/* global WazeWrap */
+/* global I18n */
+/* eslint curly: ["warn", "multi-or-nest"] */
 
 (function() {
     'use strict';
@@ -76,16 +85,16 @@
     }
 
     function GetFeaturesFromKMLString(strKML) {
-        var format = new OpenLayers.Format.KML({
+        var format = new OL.Format.KML({
             'internalProjection': W.map.baseLayer.projection,
-            'externalProjection': new OpenLayers.Projection("EPSG:4326")
+            'externalProjection': new OL.Projection("EPSG:4326")
         });
         return format.read(strKML);
     }
 
     function findCurrCity(){
         let newCity = "";
-        var mapCenter = new OpenLayers.Geometry.Point(W.map.center.lon,W.map.center.lat);
+        var mapCenter = new OL.Geometry.Point(W.map.center.lon,W.map.center.lat);
         for (var i=0;i<_layer.features.length;i++){
             var feature = _layer.features[i];
             if(pointInFeature(feature.geometry, mapCenter)){
@@ -126,7 +135,8 @@
     }
 
     function pointInFeature(geometry, mapCenter){
-        if(geometry.CLASS_NAME == "OpenLayers.Geometry.Collection"){
+        try{
+        if(geometry.CLASS_NAME == "OL.Geometry.Collection" || geometry.CLASS_NAME == "OpenLayers.Geometry.Collection"){
             for(let i=0; i<geometry.components.length; i++){
                 if(geometry.components[i].containsPoint(mapCenter))
                     return true;
@@ -134,6 +144,10 @@
         }
         else
             return geometry.containsPoint(mapCenter);
+        }
+        catch(err){
+            console.log(err);
+        }
         return false;
     }
 
@@ -245,7 +259,7 @@
         loadSettings();
 
         var layerid = 'wme_cities_overlay';
-        var layerStyle = new OpenLayers.StyleMap({
+        var layerStyle = new OL.StyleMap({
             strokeDashstyle: 'solid', strokeColor: _color,
             strokeOpacity: _settings.FillPolygons ? defaultStrokeOpacity : noFillStrokeOpacity,
             strokeWidth: 2,
@@ -391,10 +405,14 @@
     function layerToggled(visible) {
         _settings.layerVisible = visible;
         _layer.setVisibility(visible);
-        if(visible)
+        if(visible){
             $('#citiesPower').css("color", "rgb(0,180,0)");
-        else
+            W.map.events.register("moveend", null, updateCitiesLayer);
+        }
+        else{
             $('#citiesPower').css("color", "black");
+            W.map.events.unregister("moveend", null, updateCitiesLayer);
+        }
         saveSettings();
     }
 
