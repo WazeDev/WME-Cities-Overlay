@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2019.05.03.01
+// @version      2019.10.29.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -94,7 +94,7 @@
 
     function findCurrCity(){
         let newCity = "";
-        var mapCenter = new OL.Geometry.Point(W.map.center.lon,W.map.center.lat);
+        var mapCenter = new OL.Geometry.Point(W.map.getCenter().lon,W.map.getCenter().lat);
         for (var i=0;i<_layer.features.length;i++){
             var feature = _layer.features[i];
             if(pointInFeature(feature.geometry, mapCenter)){
