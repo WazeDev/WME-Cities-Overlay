@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2020.03.25.01
+// @version      2020.05.22.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -13,7 +13,7 @@
 // ==/UserScript==
 
 /* global W */
-/* global OL */
+/* global OpenLayers */
 /* ecmaVersion 2017 */
 /* global $ */
 /* global idbKeyval */
@@ -85,16 +85,16 @@
     }
 
     function GetFeaturesFromKMLString(strKML) {
-        var format = new OL.Format.KML({
+        var format = new OpenLayers.Format.KML({
             'internalProjection': W.map.getProjectionObject(),
-            'externalProjection': new OL.Projection("EPSG:4326")
+            'externalProjection': new OpenLayers.Projection("EPSG:4326")
         });
         return format.read(strKML);
     }
 
     function findCurrCity(){
         let newCity = "";
-        var mapCenter = new OL.Geometry.Point(W.map.getCenter().lon,W.map.getCenter().lat);
+        var mapCenter = new OpenLayers.Geometry.Point(W.map.getCenter().lon,W.map.getCenter().lat);
         for (var i=0;i<_layer.features.length;i++){
             var feature = _layer.features[i];
             if(pointInFeature(feature.geometry, mapCenter)){
@@ -136,7 +136,7 @@
 
     function pointInFeature(geometry, mapCenter){
         try{
-        if(geometry.CLASS_NAME == "OL.Geometry.Collection" || geometry.CLASS_NAME == "OpenLayers.Geometry.Collection"){
+        if(geometry.CLASS_NAME == "OpenLayers.Geometry.Collection" || geometry.CLASS_NAME == "OpenLayers.Geometry.Collection"){
             for(let i=0; i<geometry.components.length; i++){
                 if(geometry.components[i].containsPoint(mapCenter))
                     return true;
@@ -259,7 +259,7 @@
         loadSettings();
 
         var layerid = 'wme_cities_overlay';
-        var layerStyle = new OL.StyleMap({
+        var layerStyle = new OpenLayers.StyleMap({
             strokeDashstyle: 'solid', strokeColor: _color,
             strokeOpacity: _settings.FillPolygons ? defaultStrokeOpacity : noFillStrokeOpacity,
             strokeWidth: 2,
@@ -270,7 +270,7 @@
             fontSize: "16px"
         });
 
-        _layer = new OL.Layer.Vector("Cities Overlay", {
+        _layer = new OpenLayers.Layer.Vector("Cities Overlay", {
             rendererOptions: { zIndexing: true },
             uniqueName: layerid,
             shortcutKey: "S+" + 0,
@@ -372,7 +372,7 @@
     function insertHighlightingRules(){
         //********** Highlighting Rules ***********
         let myRule = new W.Rule({
-            filter: new OL.Filter.Comparison({
+            filter: new OpenLayers.Filter.Comparison({
                 type: '==',
                 evaluate: function(cityFeature) {
                     return cityFeature.attributes.name === currCity;
@@ -385,7 +385,7 @@
             name: "WMECOHighlightCurr"
         });
         let myRule2 = new W.Rule({
-            filter: new OL.Filter.Comparison({
+            filter: new OpenLayers.Filter.Comparison({
                 type: '!=',
                 evaluate: function(cityFeature) {
                     return cityFeature.attributes.name != currCity;
