@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2022.12.29.01
+// @version      2022.12.29.02
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -198,7 +198,6 @@
 
                     if(stateObj.kmlsize !== KMLinfoArr[j].size){
                         let kml = await fetch(`https://raw.githubusercontent.com/${repoOwner}/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${state}_Cities.kml`);
-                        kml = $.parseJSON(kml);
 
                         if(state === countryAbbrObj.getAbbreviation(currState))
                             _kml = kml;
@@ -458,7 +457,6 @@
                     //if the store didn't have the state, look it up from github and enter it in the store
                     if(!request){
                         let kml = await fetch(`https://raw.githubusercontent.com/${repoOwner}/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${stateAbbr}_Cities.kml`);
-                        kml = $.parseJSON(kml);
                         _kml = kml;
                         updatePolygons();
 
