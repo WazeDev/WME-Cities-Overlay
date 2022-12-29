@@ -8,7 +8,10 @@
 // @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
 // @require      https://greasyfork.org/scripts/369729-wme-cities-overlay-db/code/WME%20Cities%20Overlay%20DB.js
 // @license      GNU GPLv3
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @connect      api.github.com
+// @connect      raw.githubusercontent.com
+// @connect
 // @contributionURL https://github.com/WazeDev/Thank-The-Authors
 // ==/UserScript==
 
@@ -151,8 +154,24 @@
         return false;
     }
 
-    async function getKML(url){
-        return await $.get(url);
+    async function fetch(url){
+        //return await $.get(url);
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                url: url,
+                method: 'GET',
+                onload(res) {
+                    if (res.status < 400) {
+                        resolve(res.responseText);
+                    } else {
+                        reject(res);
+                    }
+                },
+                onerror(res) {
+                    reject(res);
+                }
+            });
+        });
     }
 
     async function updateAllMaps(){
@@ -167,7 +186,8 @@
         else if(countryAbbr === "MX")
             countryAbbrObj = _MX_States;
 
-        let KMLinfoArr = await $.get(`https://api.github.com/repos/WazeDev/WME-Cities-Overlay/contents/KMLs/${countryAbbr}`);
+        let KMLinfoArr = await fetch(`https://api.github.com/repos/WazeDev/WME-Cities-Overlay/contents/KMLs/${countryAbbr}`);
+        KMLinfoArr = $.parseJSON(KMLinfoArr);
         let state;
         for(let i=0; i<keys.length; i++){
             state = keys[i];
@@ -177,7 +197,8 @@
                     let stateObj = await idbKeyval.get(`${countryAbbr}_states_cities`, state);
 
                     if(stateObj.kmlsize !== KMLinfoArr[j].size){
-                        let kml = await getKML(`https://raw.githubusercontent.com/${repoOwner}/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${state}_Cities.kml`);
+                        let kml = await fetch(`https://raw.githubusercontent.com/${repoOwner}/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${state}_Cities.kml`);
+                        kml = $.parseJSON(kml);
 
                         if(state === countryAbbrObj.getAbbreviation(currState))
                             _kml = kml;
@@ -436,7 +457,8 @@
 
                     //if the store didn't have the state, look it up from github and enter it in the store
                     if(!request){
-                        let kml = await getKML(`https://raw.githubusercontent.com/${repoOwner}/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${stateAbbr}_Cities.kml`);
+                        let kml = await fetch(`https://raw.githubusercontent.com/${repoOwner}/WME-Cities-Overlay/master/KMLs/${countryAbbr}/${stateAbbr}_Cities.kml`);
+                        kml = $.parseJSON(kml);
                         _kml = kml;
                         updatePolygons();
 
