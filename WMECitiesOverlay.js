@@ -327,7 +327,7 @@
             '</div>'
         ].join(' '));
 
-        new WazeWrap.Interface.Tab('Cities', $section.html(), init2);
+        WazeWrap.Interface.Tab('Cities', $section.html(), init2);
     }
 
     function init2(){
