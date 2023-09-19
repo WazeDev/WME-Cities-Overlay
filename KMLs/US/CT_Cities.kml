@@ -4,9 +4,10 @@
 <!-- initial information from JS55CT with edits from W1QA -->
 <!-- v1.01  2023-09-17  W1QA  initial version -->
 <!-- v1.02  2023-09-18  W1QA  updated version from JS55CT with simplified coastline -->
+<!-- v1.03  2023-09-18  W1QA  reduced precision to 4 decimal places -->
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>
-	<Name>CT_Cities_v1.02</Name>
+	<Name>CT_Cities_v1.03</Name>
 	<visibility>1</visibility>
 <Schema name="CT_Cities" id="CT_Cities">
 	<SimpleField name="Description" type="string"></SimpleField>
