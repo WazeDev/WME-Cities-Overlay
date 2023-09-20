@@ -1,16 +1,10 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<!-- CT_Cities -->
-<!-- based on State of CT Municipalities layer downloaded 17 Sep 2023 -->
-<!-- initial information from JS55CT with edits from W1QA -->
-<!-- v1.01  2023-09-17  W1QA  initial version -->
-<!-- v1.02  2023-09-18  W1QA  updated version from JS55CT with simplified coastline -->
-<!-- v1.03  2023-09-18  W1QA  reduced precision to 4 decimal places -->
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>
 	<Name>CT_Cities</Name>
 	<visibility>1</visibility>
-<Folder id="MA_Cities">
-  <name>MA_Cities</name>
+<Folder id="CT_Cities">
+  <name>CT_Cities</name>
 <!-- insert placemarks here -->
 <!-- towns -->
 <Placemark>
