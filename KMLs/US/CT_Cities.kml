@@ -7,7 +7,7 @@
 <!-- v1.03  2023-09-18  W1QA  reduced precision to 4 decimal places -->
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>
-	<Name>CT_Cities_v1.03</Name>
+	<Name>CT_Cities</Name>
 	<visibility>1</visibility>
 <Folder id="MA_Cities">
   <name>MA_Cities</name>
