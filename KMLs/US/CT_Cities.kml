@@ -8,10 +8,9 @@
 <!-- insert placemarks here -->
 <!-- towns -->
 <Placemark>
-<name>Cheshire</name>
-  <Polygon>
-<outerBoundaryIs>
-  <LinearRing><coordinates>-72.95679,41.55529
+	<name>Cheshire</name>
+	<Polygon><outerBoundaryIs><LinearRing><coordinates>
+-72.95679,41.55529
 -72.95517,41.55549
 -72.955,41.55549
 -72.95491,41.55553
@@ -577,7 +576,7 @@
 -72.95847,41.5518
 -72.95782,41.553
 -72.9576,41.5534
--72.95679,41.55529</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+-72.95679,41.55529</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
 </Folder>
-</Document>
-</kml>
+</Document></kml>
