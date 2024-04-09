@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2023.08.24.01
+// @version      2024.04.08.01
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -175,7 +175,7 @@
     }
 
     async function updateAllMaps(){
-        let countryAbbr = W.model.countries.top.abbr;
+        let countryAbbr = W.model.getTopCountry().attributes.abbr;
         let keys = await idbKeyval.keys(`${countryAbbr}_states_cities`);
         let updatedCount = 0;
         let updatedStates = "";
@@ -437,11 +437,11 @@
     }
 
     async function updateCityPolygons(){
-        if(currState != W.model.states.top.attributes.name)
+        if(currState != W.model.getTopState().attributes.name)
         {
             _layer.destroyFeatures();
-            currState = W.model.states.top.attributes.name;
-            let countryAbbr = W.model.countries.top.attributes.abbr;
+            currState = W.model.getTopState().attributes.name;
+            let countryAbbr = W.model.getTopCountry().attributes.abbr;
             let stateAbbr;
 
             if(countryAbbr === "US")
@@ -493,7 +493,7 @@
     }
 
     function bootstrap(tries = 1) {
-        if (W && W.loginManager && W.loginManager.user && W.model.states.top && WazeWrap.Ready) {
+        if (W && W.loginManager && W.loginManager.user && W.model.getTopState() && WazeWrap.Ready) {
             init();
             console.log('WME Cities Overlay:', 'Initialized');
         } else if(tries < 1000){
