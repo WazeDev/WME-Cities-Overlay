@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2025.06.04.00
+// @version      2025.06.09.00
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @match        https://www.waze.com/*/editor*
@@ -519,6 +519,12 @@
     const mapCenter = wmeSDK.Map.getMapCenter(); // Returns { lat: number, lon: number }
     const mapCenterPoint = [mapCenter.lon, mapCenter.lat];
 
+    // Check if _layer is defined and not null before proceeding
+    if (!_layer || !_layer.length) {
+      console.warn(`${scriptName}: _layer is null or undefined. Unable to find current city.`);
+      return cityData;
+    }
+
     for (let i = 0; i < _layer.length; i++) {
       const feature = _layer[i];
       const geometry = feature.geometry;
@@ -595,13 +601,20 @@
       }
 
       const topState = wmeSDK.DataModel.States.getTopState();
+      if (!topState) {
+        if (debug) console.log(`${scriptName}: topState is null. Skipping updateCityPolygons.`);
+        return;
+      }
+
       if (currState !== topState.name) {
         await updateCityPolygons();
       }
 
       currCity = findCurrCity();
+
       if (!currCity || !currCity.name) {
-        throw new Error('Current city data is invalid or missing.');
+        if (debug) console.log(`${scriptName}: No Current city Polygon found for this location....`);
+        return;
       }
 
       updateDistrictNameDisplay();
@@ -1042,8 +1055,18 @@
   async function updateCityPolygons() {
     const topState = wmeSDK.DataModel.States.getTopState();
 
+    if (!topState) {
+      console.warn(`${scriptName}: topState is null. Exiting function.`);
+      return;
+    }
+
     if (currState !== topState.name) {
       const topCountry = wmeSDK.DataModel.Countries.getTopCountry();
+
+      if (!topCountry) {
+        console.warn(`${scriptName}: topCountry is null. Exiting function.`);
+        return;
+      }
 
       // Start loading indicator
       console.log(`${scriptName}: Loading City Polygons for ${topState.name}`);
@@ -1060,7 +1083,7 @@
       else if (countryAbbr === 'MX') stateAbbr = _MX_States.getAbbreviation(currState);
 
       if (typeof stateAbbr !== 'undefined') {
-        if (typeof kmlCache[stateAbbr] == 'undefined') {
+        if (typeof kmlCache[stateAbbr] === 'undefined') {
           // Try to retrieve state info from local storage
           var request = await idbKeyval.get(`${countryAbbr}_states_cities`, stateAbbr);
 
