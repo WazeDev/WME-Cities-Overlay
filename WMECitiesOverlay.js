@@ -36,7 +36,7 @@
   let _settings;
 
   let _kml; // Holds the raw input KML File data
-  let _layer = null; // Holds the geoJSON features to map
+  let _layer = null; // Holds the geoJSON converted features to map with the SDK
   const layerid = scriptName.replace(/[^a-z0-9_-]/gi, '_');
 
   //Default settings
@@ -301,6 +301,15 @@
     }
   }
 
+  function stripElevation(coordinates) {
+    if (Array.isArray(coordinates[0])) {
+      // If coordinates are nested, recursively strip elevation
+      return coordinates.map((coord) => stripElevation(coord));
+    }
+    // Remove third element from a single set of coordinates
+    return coordinates.slice(0, 2);
+  }
+
   /**
    * Function: flattenGeoJSON
    * ------------------------
@@ -350,15 +359,6 @@
     };
 
     const updateGeoJSONType = (type) => geoJSONTypeMap[type.toUpperCase()] || type;
-
-    const stripElevation = (coordinates) => {
-      if (Array.isArray(coordinates[0])) {
-        // If coordinates are nested, recursively strip elevation
-        return coordinates.map((coord) => stripElevation(coord));
-      }
-      // Remove third element from a single set of coordinates
-      return coordinates.slice(0, 2);
-    };
 
     return features.flatMap((feature) => {
       const flattenedGeometries = [];
@@ -521,7 +521,7 @@
 
     // Check if _layer is defined and not null before proceeding
     if (!_layer || !_layer.length) {
-      console.warn(`${scriptName}: _layer is null or undefined. Unable to find current city.`);
+      if (debug) console.warn(`${scriptName}: _layer is null or undefined. Unable to find current city.`);
       return cityData;
     }
 
@@ -1056,7 +1056,7 @@
     const topState = wmeSDK.DataModel.States.getTopState();
 
     if (!topState) {
-      console.warn(`${scriptName}: topState is null. Exiting function.`);
+      if (debug) console.warn(`${scriptName}: topState is null. Exiting update.`);
       return;
     }
 
@@ -1064,7 +1064,7 @@
       const topCountry = wmeSDK.DataModel.Countries.getTopCountry();
 
       if (!topCountry) {
-        console.warn(`${scriptName}: topCountry is null. Exiting function.`);
+        if (debug) console.warn(`${scriptName}: topCountry is null. Exiting update.`);
         return;
       }
 
@@ -1199,6 +1199,6 @@
 
     // Log completion
     console.log(`${scriptName}: ${successCount} Towns added, ${errorCount} Towns skipped due to errors.`);
-    console.log(`${scriptName}: Layers Loaded are:`, _layer);
+    if (debug) console.log(`${scriptName}: Layers Loaded are:`, _layer);
   }
 })();
