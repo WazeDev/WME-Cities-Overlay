@@ -1015,6 +1015,7 @@
       document.getElementById('citiesPower').dispatchEvent(visibilityChangeEvent);
     } else {
       $('#citiesPower').css('color', 'rgb(255, 0, 0)'); // Dark mode color
+      $('.wmecitiesoverlay-region').remove(); // Remove existing district name displays
       // Remove the custom event listener when not visible
       document.getElementById('citiesPower').removeEventListener('visibilityChange', updateCitiesLayer);
     }
