@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2025.06.09.00
+// @version      2025.06.15.00
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @match        https://www.waze.com/*/editor*
@@ -1168,38 +1168,16 @@
       properties: f.properties,
     }));
 
-    // Initialize counters
-    let successCount = 0;
-    let errorCount = 0;
-
-    // Iterate over each feature to add it to the map layer
-    featuresToLoad.forEach((feature) => {
-      try {
-        wmeSDK.Map.addFeatureToLayer({
-          feature: feature,
+    wmeSDK.Map.dangerouslyAddFeaturesToLayerWithoutValidation({
+          features: featuresToLoad,
           layerName: layerid,
         });
-
-        successCount++; // Increment success counter
-      } catch (error) {
-        errorCount++; // Increment error counter
-        if (error.name === 'InvalidStateError') {
-          console.error(`${scriptName}: Failed to add feature with ID: ${feature.id}. The layer "${layerid}" might not exist.`);
-        } else if (error.name === 'ValidationError') {
-          console.error(`${scriptName}: Validation error for feature with ID: ${feature.id}. Check geometry type and properties.`, error);
-          console.error(`${scriptName}: Feature details:`, feature);
-        } else {
-          console.error(`${scriptName}: Unexpected error adding feature with ID: ${feature.id}:`, error);
-          console.error(`${scriptName}: Feature details:`, feature);
-        }
-      }
-    });
 
     _layer = featuresToLoad; // populates the global _layer
     if (debug) console.log(`${scriptName}: Current State is ${currState}`);
 
     // Log completion
-    console.log(`${scriptName}: ${successCount} Towns added, ${errorCount} Towns skipped due to errors.`);
+    console.log(`${scriptName}: ${featuresToLoad.length} Towns added`);
     if (debug) console.log(`${scriptName}: Layers Loaded are:`, _layer);
   }
 })();
