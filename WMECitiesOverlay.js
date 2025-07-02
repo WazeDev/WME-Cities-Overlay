@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2025.06.15.00
+// @version      2025.07.02.00
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @match        https://www.waze.com/*/editor*
@@ -872,7 +872,7 @@
       const style = document.createElement('style');
       style.textContent = `
     .wmecoSettingsCheckbox {
-      margin-right: 12px;  /* Adds space to the right of the checkbox */
+      margin-right: 5px;  /* Adds space to the right of the checkbox */
       cursor: pointer;  /* Pointer indicates interactivity */
       appearance: none;  /* Remove default styling */
       width: 16px;  /* Width of checkbox */
@@ -888,30 +888,27 @@
     .wmecoSettingsCheckbox:hover {
       background-color: #d1d1d1;  /* Slightly darker on hover */
       border-color: #999;  /* Darker border on hover */
+      margin-right: 5px;
+
     }
     
     .wmecoSettingsCheckbox:checked {
       background-color: #4caf50;  /* Green background for checked state */
       border-color: #3e8e41;  /* Darker green border for checked */
+      margin-right: 5px;
     }
     
     .wmecoSettingsCheckbox:checked::after {
       content: '';  /* Content for checkmark */
       position: absolute;
-      left: 5px;  /* Horizontal position for checkmark */
-      top: 1px;  /* Vertical position for checkmark */
-      width: 6px;  /* Width of checkmark */
+      left: 4px;  /* Horizontal position for checkmark */
+      top: 0px;  /* Vertical position for checkmark */
+      width: 12px;  /* Width of checkmark */
       height: 12px;  /* Height of checkmark */
       border: solid white;  /* White checkmark */
-      border-width: 0 2px 2px 0;
+      border-width: 0 3px 3px 0;
       transform: rotate(45deg);  /* Rotation to create checkmark */
-    }
-    
-    label {
-      font-family: Arial, sans-serif;  /* Modern font */
-      color: #333;  /* Text color */
-      font-size: 0.9em;  /* Slightly smaller font size for labels */
-      padding-left: 4px;  /* Space between checkbox and label */
+      margin-right: 5px;
     }
   `;
       document.head.appendChild(style);
