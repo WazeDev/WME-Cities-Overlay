@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2025.07.02.00
+// @version      2025.08.18.00
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @match        https://www.waze.com/*/editor*
@@ -9,7 +9,7 @@
 // @match        https://beta.waze.com/*
 // @exclude      https://www.waze.com/*user/*editor/*
 // @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
-// @require      https://greasyfork.org/scripts/369729-wme-cities-overlay-db/code/WME%20Cities%20Overlay%20DB.js
+// @require      https://update.greasyfork.org/scripts/546306/1644332/WME%20Cities%20Overlay_DB.js
 // @require      https://update.greasyfork.org/scripts/524747/1542062/GeoKMLer.js
 // @license      GNU GPLv3
 // @grant        GM_xmlhttpRequest
@@ -169,6 +169,41 @@
     },
     getStateAbbrArray: function () {
       return Object.values(_MX_States).filter((x) => {
+        if (typeof x !== 'function') return x;
+      });
+    },
+  };
+
+
+  const _CA_States = {
+    Alberta: 'AB',
+    'British Columbia': 'BC',
+    'Manitoba': 'MB',
+    'New Brunswick': 'NB',
+    'Newfoundland and Labrador': 'NL',
+    'Nova Scotia': 'NS',
+    Nunavut: 'NT',
+    'Northwest Territories': 'NU',
+    Ontario: 'ON',
+    'Prince Edward Island': 'PE',
+    Quebec: 'QC',
+    Saskatchewan: 'SK',
+    Yukon: 'YT',
+    getAbbreviation: function (state) {
+      return this[state];
+    },
+    getStateFromAbbr: function (abbr) {
+      return Object.entries(_CA_States).filter((x) => {
+        if (x[1] == abbr) return x;
+      })[0][0];
+    },
+    getStatesArray: function () {
+      return Object.keys(_CA_States).filter((x) => {
+        if (typeof _CA_States[x] !== 'function') return x;
+      });
+    },
+    getStateAbbrArray: function () {
+      return Object.values(_CA_States).filter((x) => {
         if (typeof x !== 'function') return x;
       });
     },
@@ -732,6 +767,7 @@
 
     if (countryAbbr === 'US') countryAbbrObj = _US_States;
     else if (countryAbbr === 'MX') countryAbbrObj = _MX_States;
+    else if (countryAbbr === 'CA') countryAbbrObj = _CA_States;
 
     let KMLinfoArr = await fetch(`https://api.github.com/repos/${repoOwner}/WME-Cities-Overlay/contents/KMLs/${countryAbbr}`);
     KMLinfoArr = $.parseJSON(KMLinfoArr);
@@ -1079,6 +1115,7 @@
 
       if (countryAbbr === 'US') stateAbbr = _US_States.getAbbreviation(currState);
       else if (countryAbbr === 'MX') stateAbbr = _MX_States.getAbbreviation(currState);
+      else if (countryAbbr === 'CA') stateAbbr = _CA_States.getAbbreviation(currState);
 
       if (typeof stateAbbr !== 'undefined') {
         if (typeof kmlCache[stateAbbr] === 'undefined') {
