@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Cities Overlay
 // @namespace    https://greasyfork.org/en/users/166843-wazedev
-// @version      2026.03.08.00
+// @version      2026.10.30.00
 // @description  Adds a city overlay for selected states
 // @author       WazeDev
 // @match        https://www.waze.com/*/editor*
@@ -11,7 +11,7 @@
 // @require      https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js
 // @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
 // @require      https://update.greasyfork.org/scripts/546306/1644332/WME%20Cities%20Overlay_DB.js
-// @require      https://update.greasyfork.org/scripts/524747/1542062/GeoKMLer.js
+// @require      https://update.greasyfork.org/scripts/524747/GeoKMLer.js
 // @license      GNU GPLv3
 // @grant        GM_xmlhttpRequest
 // @connect      api.github.com
@@ -240,13 +240,14 @@
     wmeSDK = unsafeWindow.getWmeSdk({
       scriptId: scriptName.replaceAll(' ', ''),
       scriptName: scriptName,
+      mode: 'async',
     });
 
     // Use Promise.all to check readiness of all dependencies
     Promise.all([isWmeReady(), isWazeWrapReady(), isGeoKMLerReady()])
-      .then(() => {
+      .then(async () => {
         console.log(`${scriptName}: All dependencies are ready.`);
-        init();
+        await init();
         console.log(`${scriptName}: Initialized`);
       })
       .catch((error) => {
@@ -260,27 +261,21 @@
    *
    * @returns {Promise<void>}
    */
-  function isWmeReady() {
-    return new Promise((resolve, reject) => {
-      if (wmeSDK && wmeSDK.State.isReady() && wmeSDK.Sidebar && wmeSDK.LayerSwitcher && wmeSDK.Shortcuts && wmeSDK.Events) {
-        console.log(`${scriptName}: WME is already ready.`);
-        resolve();
-      } else {
-        wmeSDK.Events.once({ eventName: 'wme-ready' })
-          .then(() => {
-            if (wmeSDK.Sidebar && wmeSDK.LayerSwitcher && wmeSDK.Shortcuts && wmeSDK.Events) {
-              console.log(`${scriptName}: WME is fully ready now.`);
-              resolve();
-            } else {
-              reject(`${scriptName}: Some SDK components are not loaded.`);
-            }
-          })
-          .catch((error) => {
-            console.error(`${scriptName}: Error while waiting for WME to be ready:`, error);
-            reject(error);
-          });
-      }
-    });
+  async function isWmeReady() {
+    if (wmeSDK && (await wmeSDK.State.isReady()) && wmeSDK.Sidebar && wmeSDK.LayerSwitcher && wmeSDK.Shortcuts && wmeSDK.Events) {
+      console.log(`${scriptName}: WME is already ready.`);
+      return;
+    }
+    try {
+      await wmeSDK.Events.once({ eventName: 'wme-ready' });
+    } catch (error) {
+      console.error(`${scriptName}: Error while waiting for WME to be ready:`, error);
+      throw error;
+    }
+    if (!(wmeSDK.Sidebar && wmeSDK.LayerSwitcher && wmeSDK.Shortcuts && wmeSDK.Events)) {
+      throw `${scriptName}: Some SDK components are not loaded.`;
+    }
+    console.log(`${scriptName}: WME is fully ready now.`);
   }
 
   /**
@@ -334,6 +329,16 @@
     });
   }
 
+  /**
+   * Wraps an event handler so any promise it returns is awaited and a rejection is logged
+   * instead of escaping as an unhandled promise rejection.
+   *
+   * @param {Function} fn - Event handler that may call async SDK methods.
+   * @returns {Function} A handler that forwards its arguments and never rejects.
+   */
+  function handle(fn) {
+    return (...args) => Promise.resolve(fn(...args)).catch((error) => console.error(`${scriptName}: Handler failed -`, error));
+  }
 
   /**
    * Loads persisted settings from localStorage into `_settings`, merging any missing
@@ -396,71 +401,24 @@
   }
 
   /**
-   * Recursively removes the third (elevation/Z) value from a GeoJSON coordinate array,
-   * normalising all geometries to 2D [longitude, latitude] pairs.
-   *
-   * @param {Array} coordinates - A coordinate array at any nesting depth.
-   * @returns {Array} The same structure with every leaf coordinate truncated to [x, y].
-   */
-  function stripElevation(coordinates) {
-    if (Array.isArray(coordinates[0])) {
-      // If coordinates are nested, recursively strip elevation
-      return coordinates.map((coord) => stripElevation(coord));
-    }
-    // Remove third element from a single set of coordinates
-    return coordinates.slice(0, 2);
-  }
-
-  /**
-   * Converts a GeoJSON FeatureCollection into a flat array of simple-geometry Features.
-   * Multi-geometry types (MultiPolygon, MultiLineString, MultiPoint) and GeometryCollections
-   * are decomposed into individual Features via `turf.flattenEach`. Each feature's name
-   * property is cleaned of KML artefact characters and copied to `properties.labelText`.
-   * All coordinates are stripped to 2D using `stripElevation`.
-   *
-   * @param {Object} geoJson - A GeoJSON FeatureCollection.
-   * @returns {Array<Object>} Flat array of GeoJSON Feature objects ready for layer use.
-   * @throws {Error} If `geoJson` is not a valid FeatureCollection.
-   */
-  function flattenGeoJSON(geoJson) {
-    if (geoJson.type !== 'FeatureCollection' || !Array.isArray(geoJson.features)) {
-      throw new Error('Invalid GeoJSON input: expected a FeatureCollection.');
-    }
-    const result = [];
-    turf.flattenEach(geoJson, (feature) => {
-      if (feature.properties) {
-        const nameKey = ['name', 'Name', 'NAME'].find((k) => feature.properties[k]);
-        if (nameKey) {
-          feature.properties[nameKey] = feature.properties[nameKey]
-            .replace(/<at><openparen>/gi, '')
-            .replace(/<closeparen>/gi, '');
-          feature.properties.labelText = feature.properties[nameKey];
-        }
-      }
-      result.push({
-        type: 'Feature',
-        geometry: {
-          type: feature.geometry.type,
-          coordinates: stripElevation(feature.geometry.coordinates),
-        },
-        properties: feature.properties,
-      });
-    });
-    return result;
-  }
-
-  /**
-   * Parses a KML string into a flat array of GeoJSON Features using the GeoKMLer library
-   * followed by `flattenGeoJSON` to normalise and decompose the result.
+   * Parses a KML string into a flat array of 2D GeoJSON Features using GeoKMLer. GeoKMLer
+   * already splits MultiGeometry and drops elevation, and this cleans each feature's name
+   * of KML artefact characters and copies it to `properties.labelText`.
    *
    * @param {string} strKML - Raw KML document string.
    * @returns {Array<Object>} Flat array of GeoJSON Feature objects.
    */
   function GetFeaturesFromKMLString(strKML) {
     const geoKMLer = new GeoKMLer();
-    const kmlDoc = geoKMLer.read(strKML);
-    const GeoJSONflat = flattenGeoJSON(geoKMLer.toGeoJSON(kmlDoc, false)); // false = don't need the added CRS info section
-    return GeoJSONflat;
+    const geoJson = geoKMLer.toGeoJSON(geoKMLer.read(strKML), false, true); // false = no CRS info, true = dropElevation
+    return geoJson.features.map((feature) => {
+      const nameKey = ['name', 'Name', 'NAME'].find((k) => feature.properties[k]);
+      if (nameKey) {
+        feature.properties[nameKey] = feature.properties[nameKey].replace(/<at><openparen>/gi, '').replace(/<closeparen>/gi, '');
+        feature.properties.labelText = feature.properties[nameKey];
+      }
+      return feature;
+    });
   }
 
   /**
@@ -493,7 +451,7 @@
    * Returns:
    * - `cityData`: An object containing the current city's name, associated feature ID, and optional DOM element.
    */
-  function findCurrCity() {
+  async function findCurrCity() {
     let cityData = {
       name: '',
       featureId: '',
@@ -501,7 +459,7 @@
     };
 
     // Get the current map center using wmeSDK
-    const mapCenter = wmeSDK.Map.getMapCenter(); // Returns { lat: number, lon: number }
+    const mapCenter = await wmeSDK.Map.getMapCenter(); // Returns { lat: number, lon: number }
     const mapCenterPoint = [mapCenter.lon, mapCenter.lat];
 
     // Check if _layer is defined and not null before proceeding
@@ -530,7 +488,7 @@
       // Only attempt to get the DOM element if a valid featureId has been set
       if (cityData.featureId) {
         try {
-          const currCityFeatureDomElement = wmeSDK.Map.getFeatureDomElement({
+          const currCityFeatureDomElement = await wmeSDK.Map.getFeatureDomElement({
             featureId: cityData.featureId,
             layerName: layerid,
           });
@@ -579,12 +537,12 @@
    */
   async function updateCitiesLayer() {
     try {
-      const zoom = wmeSDK.Map.getZoomLevel();
+      const zoom = await wmeSDK.Map.getZoomLevel();
       if (zoom < 5) {
         return;
       }
 
-      const topState = wmeSDK.DataModel.States.getTopState();
+      const topState = await wmeSDK.DataModel.States.getTopState();
       if (!topState) {
         if (debug) console.log(`${scriptName}: topState is null. Skipping updateCityPolygons.`);
         return;
@@ -593,10 +551,10 @@
       if (currState !== topState.name) {
         await updateCityPolygons(); // loads polygons + calls refreshLabels internally
       } else {
-        refreshLabels(); // same state — recompute labels for new viewport
+        await refreshLabels(); // same state — recompute labels for new viewport
       }
 
-      currCity = findCurrCity();
+      currCity = await findCurrCity();
 
       if (!currCity || !currCity.name) {
         if (debug) console.log(`${scriptName}: No Current city Polygon found for this location....`);
@@ -604,7 +562,7 @@
       }
 
       updateDistrictNameDisplay();
-      wmeSDK.Map.redrawLayer({ layerName: layerid });
+      await wmeSDK.Map.redrawLayer({ layerName: layerid });
     } catch (error) {
       console.error(`${scriptName}: Error in updateCitiesLayer -`, error);
     }
@@ -645,10 +603,10 @@
    * Clears all features from the polygon layer and re-adds the current `_layer` array,
    * ensuring the map reflects the latest loaded city boundaries.
    */
-  function addPolygonsToLayer() {
+  async function addPolygonsToLayer() {
     if (!_layer || !_layer.length) return;
-    wmeSDK.Map.removeAllFeaturesFromLayer({ layerName: layerid });
-    wmeSDK.Map.dangerouslyAddFeaturesToLayerWithoutValidation({
+    await wmeSDK.Map.removeAllFeaturesFromLayer({ layerName: layerid });
+    await wmeSDK.Map.dangerouslyAddFeaturesToLayerWithoutValidation({
       features: _layer,
       layerName: layerid,
     });
@@ -660,24 +618,24 @@
    * `getLabelPoints` to compute intersection-based label positions and adds them to the
    * labels layer. Does nothing if labels are disabled or `_layer` is empty.
    */
-  function refreshLabels() {
-    wmeSDK.Map.removeAllFeaturesFromLayer({ layerName: labelsLayerId });
+  async function refreshLabels() {
+    await wmeSDK.Map.removeAllFeaturesFromLayer({ layerName: labelsLayerId });
     if (!_settings.ShowCityLabels || !_layer || !_layer.length) return;
 
-    const ext = wmeSDK.Map.getMapExtent(); // [minX, minY, maxX, maxY]
+    const ext = await wmeSDK.Map.getMapExtent(); // [minX, minY, maxX, maxY]
     const allLabels = [];
 
-    _layer.forEach((feature) => {
+    for (const feature of _layer) {
       // Fast bbox pre-filter — skip turf.intersect for off-screen polygons
       const b = feature.properties._bbox;
-      if (!b || b[0] > ext[2] || b[2] < ext[0] || b[1] > ext[3] || b[3] < ext[1]) return;
+      if (!b || b[0] > ext[2] || b[2] < ext[0] || b[1] > ext[3] || b[3] < ext[1]) continue;
 
-      const points = getLabelPoints(feature);
+      const points = await getLabelPoints(feature);
       if (points.length) allLabels.push(...points);
-    });
+    }
 
     if (allLabels.length) {
-      wmeSDK.Map.dangerouslyAddFeaturesToLayerWithoutValidation({
+      await wmeSDK.Map.dangerouslyAddFeaturesToLayerWithoutValidation({
         features: allLabels,
         layerName: labelsLayerId,
       });
@@ -693,8 +651,8 @@
    * @param {Object} feature - A GeoJSON Feature with a Polygon geometry.
    * @returns {Array<Object>} Array of GeoJSON Point Features (may be empty).
    */
-  function getLabelPoints(feature) {
-    const screenPolygon = getScreenPolygon();
+  async function getLabelPoints(feature) {
+    const screenPolygon = await getScreenPolygon();
     const intersection = turf.intersect(turf.featureCollection([screenPolygon, feature]));
     const polygons = [];
     if (intersection) {
@@ -710,7 +668,7 @@
       }
     }
 
-    const screenArea = getScreenArea();
+    const screenArea = await getScreenArea();
     return polygons
       .filter((polygon) => {
         const polygonArea = turf.area(polygon);
@@ -733,8 +691,8 @@
    * cached values, so callers always receive an up-to-date result without performing
    * redundant recalculations on each label refresh.
    */
-  function ensurePolygonCaches() {
-    const ext = wmeSDK.Map.getMapExtent();
+  async function ensurePolygonCaches() {
+    const ext = await wmeSDK.Map.getMapExtent();
     if (
       _cachedExtent &&
       _cachedScreenPolygon &&
@@ -765,8 +723,8 @@
    *
    * @returns {Object} A turf Polygon Feature representing the visible map extent.
    */
-  function getScreenPolygon() {
-    ensurePolygonCaches();
+  async function getScreenPolygon() {
+    await ensurePolygonCaches();
     return _cachedScreenPolygon;
   }
 
@@ -776,8 +734,8 @@
    *
    * @returns {number} Viewport area in m².
    */
-  function getScreenArea() {
-    ensurePolygonCaches();
+  async function getScreenArea() {
+    await ensurePolygonCaches();
     return _cachedScreenArea;
   }
 
@@ -839,7 +797,11 @@
    * - `kmlCache`: Object to locally cache loaded KML data for efficient retrieval.
    */
   async function updateAllMaps() {
-    const topCountry = wmeSDK.DataModel.Countries.getTopCountry();
+    const topCountry = await wmeSDK.DataModel.Countries.getTopCountry();
+    if (!topCountry) {
+      $('#WMECOupdateStatus').text('No country detected under the map center.');
+      return;
+    }
     let countryAbbr = topCountry.abbr;
     let keys = await idbKeyval.keys(`${countryAbbr}_states_cities`);
     let updatedCount = 0;
@@ -883,7 +845,7 @@
     if (updatedCount > 0) $('#WMECOupdateStatus').text(`${updatedCount} state file${updatedCount > 1 ? 's' : ''} updated - ${updatedStates}`);
     else $('#WMECOupdateStatus').text('No updates available');
 
-    updateCitiesLayer();
+    await updateCitiesLayer();
   }
 
   /**
@@ -934,7 +896,7 @@
       },
     };
 
-    wmeSDK.Map.addLayer({
+    await wmeSDK.Map.addLayer({
       layerName: layerid,
       styleRules: layerConfig.styleRules,
       styleContext: layerConfig.styleContext,
@@ -942,7 +904,7 @@
     });
 
     // Labels layer — registered after polygon layer so it always renders on top
-    wmeSDK.Map.addLayer({
+    await wmeSDK.Map.addLayer({
       layerName: labelsLayerId,
       styleRules: [
         {
@@ -986,18 +948,18 @@
     });
 
     // Set visibility to true for the layer
-    wmeSDK.Map.setLayerVisibility({ layerName: layerid, visibility: _settings.layerVisible });
-    wmeSDK.Map.setLayerVisibility({ layerName: labelsLayerId, visibility: _settings.layerVisible });
-    wmeSDK.LayerSwitcher.addLayerCheckbox({ name: 'Cities Overlay' });
-    wmeSDK.LayerSwitcher.setLayerCheckboxChecked({ name: 'Cities Overlay', isChecked: _settings.layerVisible });
-    wmeSDK.Events.on({ eventName: 'wme-layer-checkbox-toggled', eventHandler: layerToggled });
-    wmeSDK.Events.on({ eventName: 'wme-map-move-end', eventHandler: onMapMove });
+    await wmeSDK.Map.setLayerVisibility({ layerName: layerid, visibility: _settings.layerVisible });
+    await wmeSDK.Map.setLayerVisibility({ layerName: labelsLayerId, visibility: _settings.layerVisible });
+    await wmeSDK.LayerSwitcher.addLayerCheckbox({ name: 'Cities Overlay' });
+    await wmeSDK.LayerSwitcher.setLayerCheckboxChecked({ name: 'Cities Overlay', isChecked: _settings.layerVisible });
+    wmeSDK.Events.on({ eventName: 'wme-layer-checkbox-toggled', eventHandler: handle(layerToggled) });
+    wmeSDK.Events.on({ eventName: 'wme-map-move-end', eventHandler: handle(onMapMove) });
 
     if (_settings.layerVisible) {
       await updateCityPolygons();
-      currCity = findCurrCity();
+      currCity = await findCurrCity();
       if (_settings.AutoUpdateKMLs) {
-        updateAllMaps();
+        updateAllMaps().catch((error) => console.error(`${scriptName}: Database update failed -`, error));
       }
     }
   } // END int() function
@@ -1079,7 +1041,7 @@
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.checked = checked;
-      input.addEventListener('change', () => onChange(input.checked));
+      input.addEventListener('change', handle(() => onChange(input.checked)));
       const slider = document.createElement('span');
       slider.className = 'co-toggle-slider';
       wrap.appendChild(input);
@@ -1139,13 +1101,16 @@
       slider.value = value;
       updateSlider(slider);
 
-      slider.addEventListener('input', () => {
-        const val = parseFloat(slider.value);
-        _settings[settingKey] = val;
-        updateSlider(slider);
-        saveSettings();
-        wmeSDK.Map.redrawLayer({ layerName: layerid });
-      });
+      slider.addEventListener(
+        'input',
+        handle(async () => {
+          const val = parseFloat(slider.value);
+          _settings[settingKey] = val;
+          updateSlider(slider);
+          saveSettings();
+          await wmeSDK.Map.redrawLayer({ layerName: layerid });
+        }),
+      );
       wrapper.appendChild(slider);
 
       const presets = document.createElement('div');
@@ -1154,13 +1119,16 @@
         const btn = document.createElement('button');
         btn.className = 'co-preset';
         btn.textContent = `${val * 100}%`;
-        btn.addEventListener('click', () => {
-          slider.value = val;
-          _settings[settingKey] = val;
-          updateSlider(slider);
-          saveSettings();
-          wmeSDK.Map.redrawLayer({ layerName: layerid });
-        });
+        btn.addEventListener(
+          'click',
+          handle(async () => {
+            slider.value = val;
+            _settings[settingKey] = val;
+            updateSlider(slider);
+            saveSettings();
+            await wmeSDK.Map.redrawLayer({ layerName: layerid });
+          }),
+        );
         presets.appendChild(btn);
       });
       wrapper.appendChild(presets);
@@ -1173,7 +1141,7 @@
         const powerBtnColor = _settings.layerVisible ? '#00bd00' : '#ccc';
         tabLabel.innerHTML = `<span id="cities-overlay-power-btn" class="fa fa-power-off" title="Toggle Cities Overlay" style="margin-right:5px;cursor:pointer;color:${powerBtnColor};font-size:13px;"></span><span title="${scriptName}">Cities</span>`;
         $('#cities-overlay-power-btn').on('click', function () {
-          setLayerVisible(!_settings.layerVisible);
+          setLayerVisible(!_settings.layerVisible).catch((error) => console.error(`${scriptName}: Layer toggle failed -`, error));
           return false;
         });
         tabPane.classList.add('wme-cities-panel');
@@ -1220,10 +1188,10 @@
         displayCard.appendChild(
           makeRow(
             'Fill Polygons',
-            makeToggle(_settings.FillPolygons, (checked) => {
+            makeToggle(_settings.FillPolygons, async (checked) => {
               _settings.FillPolygons = checked;
               saveSettings();
-              wmeSDK.Map.redrawLayer({ layerName: layerid });
+              await wmeSDK.Map.redrawLayer({ layerName: layerid });
             }),
           ),
         );
@@ -1231,10 +1199,10 @@
         displayCard.appendChild(
           makeRow(
             'Show City Labels',
-            makeToggle(_settings.ShowCityLabels, (checked) => {
+            makeToggle(_settings.ShowCityLabels, async (checked) => {
               _settings.ShowCityLabels = checked;
               saveSettings();
-              refreshLabels();
+              await refreshLabels();
             }),
           ),
         );
@@ -1242,10 +1210,10 @@
         displayCard.appendChild(
           makeRow(
             'Highlight Focused City',
-            makeToggle(_settings.HighlightFocusedCity, (checked) => {
+            makeToggle(_settings.HighlightFocusedCity, async (checked) => {
               _settings.HighlightFocusedCity = checked;
               saveSettings();
-              wmeSDK.Map.redrawLayer({ layerName: layerid });
+              await wmeSDK.Map.redrawLayer({ layerName: layerid });
             }),
           ),
         );
@@ -1264,26 +1232,32 @@
         strokeColorInput.type = 'color';
         strokeColorInput.className = 'co-color-btn';
         strokeColorInput.value = _settings.strokeColor;
-        strokeColorInput.addEventListener('input', () => {
-          _settings.strokeColor = strokeColorInput.value;
-          saveSettings();
-          wmeSDK.Map.redrawLayer({ layerName: layerid });
-          wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
-          // Keep synced label color pickers in step with the new stroke color
-          if (_settings.labelColorMatchStroke) labelColorInput.value = _settings.strokeColor;
-          if (_settings.labelOutlineColorMatchStroke) outlineColorInput.value = _settings.strokeColor;
-        });
+        strokeColorInput.addEventListener(
+          'input',
+          handle(async () => {
+            _settings.strokeColor = strokeColorInput.value;
+            saveSettings();
+            // Keep synced label color pickers in step with the new stroke color
+            if (_settings.labelColorMatchStroke) labelColorInput.value = _settings.strokeColor;
+            if (_settings.labelOutlineColorMatchStroke) outlineColorInput.value = _settings.strokeColor;
+            await wmeSDK.Map.redrawLayer({ layerName: layerid });
+            await wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
+          }),
+        );
         styleCard.appendChild(makeRow('Stroke Color', strokeColorInput));
 
         const fillColorInput = document.createElement('input');
         fillColorInput.type = 'color';
         fillColorInput.className = 'co-color-btn';
         fillColorInput.value = _settings.fillColor;
-        fillColorInput.addEventListener('input', () => {
-          _settings.fillColor = fillColorInput.value;
-          saveSettings();
-          wmeSDK.Map.redrawLayer({ layerName: layerid });
-        });
+        fillColorInput.addEventListener(
+          'input',
+          handle(async () => {
+            _settings.fillColor = fillColorInput.value;
+            saveSettings();
+            await wmeSDK.Map.redrawLayer({ layerName: layerid });
+          }),
+        );
         styleCard.appendChild(makeRow('Fill Color', fillColorInput));
 
         styleCard.appendChild(makeSliderRow('Stroke Opacity', 'strokeOpacity', _settings.strokeOpacity));
@@ -1323,23 +1297,26 @@
           colorInput.value = _settings[syncSetting] ? _settings.strokeColor : _settings[colorSetting];
           colorInput.disabled = _settings[syncSetting];
 
-          const syncToggle = makeToggle(_settings[syncSetting], (checked) => {
+          const syncToggle = makeToggle(_settings[syncSetting], async (checked) => {
             _settings[syncSetting] = checked;
             colorInput.disabled = checked;
             if (checked) colorInput.value = _settings.strokeColor; // reflect current stroke color
             saveSettings();
-            wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
+            await wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
           });
 
           const syncLabel = document.createElement('span');
           syncLabel.className = 'co-toggle-text';
           syncLabel.textContent = 'Stroke';
 
-          colorInput.addEventListener('input', () => {
-            _settings[colorSetting] = colorInput.value;
-            saveSettings();
-            wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
-          });
+          colorInput.addEventListener(
+            'input',
+            handle(async () => {
+              _settings[colorSetting] = colorInput.value;
+              saveSettings();
+              await wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
+            }),
+          );
 
           row.appendChild(lbl);
           row.appendChild(colorInput);
@@ -1384,22 +1361,25 @@
           numInput.value = _settings[numSetting];
           numInput.disabled = _settings[autoSetting];
 
-          const autoToggle = makeToggle(_settings[autoSetting], (checked) => {
+          const autoToggle = makeToggle(_settings[autoSetting], async (checked) => {
             _settings[autoSetting] = checked;
             numInput.disabled = checked;
             saveSettings();
-            wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
+            await wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
           });
 
           const autoLabel = document.createElement('span');
           autoLabel.className = 'co-toggle-text';
           autoLabel.textContent = autoText;
 
-          numInput.addEventListener('change', () => {
-            _settings[numSetting] = parseFloat(numInput.value);
-            saveSettings();
-            wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
-          });
+          numInput.addEventListener(
+            'change',
+            handle(async () => {
+              _settings[numSetting] = parseFloat(numInput.value);
+              saveSettings();
+              await wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
+            }),
+          );
 
           row.appendChild(lbl);
           row.appendChild(numInput);
@@ -1513,7 +1493,7 @@
          *
          * @param {Object} p - A fully-specified preset object containing all style keys.
          */
-        function applyPreset(p) {
+        async function applyPreset(p) {
           Object.assign(_settings, p);
           saveSettings();
           // Polygon style
@@ -1540,15 +1520,18 @@
           outlineWidthNumInput.disabled = _settings.labelOutlineWidthRelative;
           outlineWidthAutoToggle.querySelector('input').checked = _settings.labelOutlineWidthRelative;
           // Redraw both layers
-          wmeSDK.Map.redrawLayer({ layerName: layerid });
-          wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
+          await wmeSDK.Map.redrawLayer({ layerName: layerid });
+          await wmeSDK.Map.redrawLayer({ layerName: labelsLayerId });
         }
 
         presetsDiv.querySelectorAll('.co-preset-chip').forEach((chip) => {
-          chip.addEventListener('click', () => {
-            const preset = PRESETS[chip.dataset.preset];
-            if (preset) applyPreset(preset);
-          });
+          chip.addEventListener(
+            'click',
+            handle(() => {
+              const preset = PRESETS[chip.dataset.preset];
+              if (preset) return applyPreset(preset);
+            }),
+          );
         });
 
         // Database card
@@ -1572,7 +1555,7 @@
         const updateBtn = document.createElement('button');
         updateBtn.className = 'co-btn';
         updateBtn.textContent = 'Refresh / Update Database';
-        updateBtn.addEventListener('click', updateAllMaps);
+        updateBtn.addEventListener('click', handle(updateAllMaps));
         dbCard.appendChild(updateBtn);
 
         const statusDiv = document.createElement('div');
@@ -1591,9 +1574,9 @@
    * Handles the `wme-map-move-end` event. Triggers a city layer refresh whenever the
    * layer is currently visible.
    */
-  function onMapMove() {
+  async function onMapMove() {
     if (_settings.layerVisible) {
-      updateCitiesLayer();
+      await updateCitiesLayer();
     }
   }
 
@@ -1602,16 +1585,16 @@
    * checkbox, and the sidebar power button color. Triggers a city refresh on show,
    * or removes the district name label on hide. Persists the new visibility state.
    */
-  function setLayerVisible(value) {
+  async function setLayerVisible(value) {
     _settings.layerVisible = value;
 
-    wmeSDK.Map.setLayerVisibility({ layerName: layerid, visibility: value });
-    wmeSDK.Map.setLayerVisibility({ layerName: labelsLayerId, visibility: value });
-    wmeSDK.LayerSwitcher.setLayerCheckboxChecked({ name: 'Cities Overlay', isChecked: value });
+    await wmeSDK.Map.setLayerVisibility({ layerName: layerid, visibility: value });
+    await wmeSDK.Map.setLayerVisibility({ layerName: labelsLayerId, visibility: value });
+    await wmeSDK.LayerSwitcher.setLayerCheckboxChecked({ name: 'Cities Overlay', isChecked: value });
     $('span#cities-overlay-power-btn').css({ color: value ? '#00bd00' : '#ccc' });
 
     if (value) {
-      updateCitiesLayer();
+      await updateCitiesLayer();
     } else {
       $('.wmecitiesoverlay-region').remove();
     }
@@ -1622,8 +1605,8 @@
    * Handles the `wme-layer-checkbox-toggled` event fired by the WME layer switcher.
    * Delegates to setLayerVisible using the checkbox's authoritative checked state.
    */
-  function layerToggled(args) {
-    setLayerVisible(args.checked);
+  async function layerToggled(args) {
+    await setLayerVisible(args.checked);
   }
 
   /**
@@ -1658,7 +1641,7 @@
    * - `kmlCache`: Object to store loaded KML data for future use.
    */
   async function updateCityPolygons() {
-    const topState = wmeSDK.DataModel.States.getTopState();
+    const topState = await wmeSDK.DataModel.States.getTopState();
 
     if (!topState) {
       if (debug) console.warn(`${scriptName}: topState is null. Exiting update.`);
@@ -1666,7 +1649,7 @@
     }
 
     if (currState !== topState.name) {
-      const topCountry = wmeSDK.DataModel.Countries.getTopCountry();
+      const topCountry = await wmeSDK.DataModel.Countries.getTopCountry();
 
       if (!topCountry) {
         if (debug) console.warn(`${scriptName}: topCountry is null. Exiting update.`);
@@ -1678,7 +1661,7 @@
       console.time(`${scriptName}: Loaded City Polygons for ${topState.name} in`);
 
       // Clear all features from layer before loading new data
-      wmeSDK.Map.removeAllFeaturesFromLayer({ layerName: layerid });
+      await wmeSDK.Map.removeAllFeaturesFromLayer({ layerName: layerid });
       currState = topState.name;
 
       let countryAbbr = topCountry.abbr;
@@ -1701,7 +1684,7 @@
 
             let kml = await fetch(kmlURL);
             _kml = kml;
-            updatePolygons();
+            await updatePolygons();
 
             await idbKeyval.set(`${countryAbbr}_states_cities`, {
               kml: kml,
@@ -1713,11 +1696,11 @@
           } else {
             _kml = request.kml;
             kmlCache[stateAbbr] = _kml; // Cache locally if already fetched
-            updatePolygons();
+            await updatePolygons();
           }
         } else {
           _kml = kmlCache[stateAbbr];
-          updatePolygons();
+          await updatePolygons();
         }
       }
 
@@ -1752,7 +1735,7 @@
    * - `layerid`: Identifier for the target layer.
    * - `debug`: Flag to enable detailed logging for troubleshooting.
    */
-  function updatePolygons() {
+  async function updatePolygons() {
     // Retrieve GeoJSON features from the KML string; conversion handled inside GetFeaturesFromKMLString
     const rawFeatures = GetFeaturesFromKMLString(_kml);
 
@@ -1769,7 +1752,7 @@
     if (debug) console.log(`${scriptName}: Layers Loaded are:`, _layer);
 
     // Add all polygon features once; labels are handled separately
-    addPolygonsToLayer();
-    refreshLabels();
+    await addPolygonsToLayer();
+    await refreshLabels();
   }
 })();
